@@ -48,7 +48,14 @@ jobs:
 
       - name: Build Release APK
         run: |
-          flutter build apk --release --no-tree-shake-icons > build.log 2>&1 || (echo "=== GRADLE BUILD FAILED LOG ===" && tail -n 120 build.log && exit 1)
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee build.log
+
+      - name: Upload Failure Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-log
+          path: build.log
 
       - name: Rename APK for Release
         run: |
