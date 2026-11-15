@@ -40,11 +40,15 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x android/gradlew
 
+      - name: Accept Android Licenses
+        run: yes | flutter doctor --android-licenses || true
+
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Release APK
-        run: flutter build apk --release -v
+        run: |
+          flutter build apk --release --no-tree-shake-icons > build.log 2>&1 || (echo "=== GRADLE BUILD FAILED LOG ===" && tail -n 120 build.log && exit 1)
 
       - name: Rename APK for Release
         run: |
