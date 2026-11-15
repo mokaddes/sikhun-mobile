@@ -47,25 +47,26 @@ jobs:
         run: flutter pub get
 
       - name: Build Release APK
-        run: |
-          flutter build apk --release --no-tree-shake-icons 2>&1 | tee build.log
+        run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload Failure Log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-log
-          path: build.log
-
-      - name: Rename APK for Release
+      - name: Prepare APK for Release
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/sikhun-app-release.apk
+          echo "Finding generated APK files:"
+          find build -name "*.apk"
+          APK_PATH=$(find build -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK file found!"
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+          cp "$APK_PATH" sikhun-app-release.apk
+          ls -lh sikhun-app-release.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sikhun-app-release
-          path: build/app/outputs/flutter-apk/sikhun-app-release.apk
+          path: sikhun-app-release.apk
           if-no-files-found: error
 
       - name: Create GitHub Release & Attach APK
@@ -80,6 +81,6 @@ jobs:
             
             ### ডাউনলোড ও ইনস্টল:
             নিচের Assets সেকশন থেকে `sikhun-app-release.apk` ফাইলটি সরাসরি ডাউনলোড করে আপনার অ্যান্ড্রয়েড স্মার্টফোনে ইনস্টল করুন।
-          files: build/app/outputs/flutter-apk/sikhun-app-release.apk
+          files: sikhun-app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
