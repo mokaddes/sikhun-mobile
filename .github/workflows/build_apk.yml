@@ -54,13 +54,18 @@ jobs:
 
       - name: Build Release APK
         run: |
-          if ! flutter build apk --release -v > build.log 2>&1; then
-            echo "## ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 80 build.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
+          flutter build apk --release --no-tree-shake-icons -v > build.log 2>&1
+
+      - name: Commit and Push Failure Log
+        if: failure()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout -B debug-log
+          tail -n 200 build.log > build_error.txt
+          git add build_error.txt
+          git commit -m "Build error log"
+          git push -f origin debug-log
 
       - name: Prepare APK for Release
         run: |
