@@ -6,6 +6,9 @@ import 'providers/library_provider.dart';
 import 'providers/question_bank_provider.dart';
 import 'providers/blog_provider.dart';
 import 'providers/ai_chat_provider.dart';
+import 'providers/app_setting_provider.dart';
+import 'providers/notification_provider.dart';
+import 'providers/dashboard_provider.dart';
 import 'screens/main_navigation_screen.dart';
 
 void main() async {
@@ -25,6 +28,9 @@ class SikhunApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => QuestionBankProvider()),
         ChangeNotifierProvider(create: (_) => BlogProvider()),
         ChangeNotifierProvider(create: (_) => AiChatProvider()),
+        ChangeNotifierProvider(create: (_) => AppSettingProvider()..fetchSettings()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()..startSync()),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()),
       ],
       child: MaterialApp(
         title: 'শিখুন (Sikhun)',

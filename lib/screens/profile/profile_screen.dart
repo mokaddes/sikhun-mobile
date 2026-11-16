@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/app_setting_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
+import '../dashboard/student_dashboard_screen.dart';
+import '../notifications/notification_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -17,9 +22,18 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _launchUri(String uriString) async {
+    final uri = Uri.parse(uriString);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final appSetting = Provider.of<AppSettingProvider>(context);
+    final notifProv = Provider.of<NotificationProvider>(context);
     final user = auth.user;
 
     return Scaffold(
@@ -171,7 +185,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'বই বুকশেলফে যোগ করা, ওয়ালেট ব্যবহার এবং এআই হিস্টোরি সংরক্ষণ করতে লগইন করুন',
+                      'বই বুকশেলফে যোগ করা, ওয়ালেট ব্যবহার এবং শিক্ষার্থী ড্যাশবোর্ডে প্রবেশ করতে লগইন করুন',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: SikhunTheme.mutedDark, fontSize: 13),
                     ),
@@ -207,7 +221,54 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // Menu Options
+            // Student Dashboard & Notifications Options
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                children: [
+                  if (auth.isAuthenticated) ...[
+                    ListTile(
+                      leading: const Icon(Icons.dashboard_customize_outlined, color: Color(0xFF78350F)),
+                      title: const Text('শিক্ষার্থী ড্যাশবোর্ড', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('পড়াশোনা, পরিসংখ্যান, ভুল খাতা ও লিডারবোর্ড'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const StudentDashboardScreen()),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                  ],
+                  ListTile(
+                    leading: const Icon(Icons.notifications_active_outlined, color: SikhunTheme.primary),
+                    title: const Text('নোটিফিকেশন সেন্টার'),
+                    subtitle: notifProv.unreadCount > 0
+                        ? Text('${notifProv.unreadCount} টি অপঠিত নোটিফিকেশন', style: const TextStyle(color: Colors.redAccent, fontSize: 12))
+                        : const Text('সর্বশেষ আপডেট ও ফলাফল'),
+                    trailing: notifProv.unreadCount > 0
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10)),
+                            child: Text(
+                              '${notifProv.unreadCount}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          )
+                        : const Icon(Icons.arrow_forward_ios, size: 14),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Sikhun Platform Links & Support
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -218,35 +279,56 @@ class ProfileScreen extends StatelessWidget {
                     title: const Text('ওয়েবসাইট ভিজিট করুন'),
                     subtitle: const Text('sikhun.com'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () async {
-                      final uri = Uri.parse('https://sikhun.com');
-                      if (await canLaunchUrl(uri)) launchUrl(uri);
-                    },
+                    onTap: () => _launchUri('https://sikhun.com'),
                   ),
+                  if (appSetting.settings.sitePhone != null && appSetting.settings.sitePhone!.isNotEmpty) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.phone_outlined, color: SikhunTheme.primary),
+                      title: const Text('হেল্পলাইন'),
+                      subtitle: Text(appSetting.settings.sitePhone!),
+                      trailing: const Icon(Icons.call_outlined, size: 18),
+                      onTap: () => _launchUri('tel:${appSetting.settings.sitePhone}'),
+                    ),
+                  ],
+                  if (appSetting.settings.siteEmail != null && appSetting.settings.siteEmail!.isNotEmpty) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.email_outlined, color: SikhunTheme.primary),
+                      title: const Text('সাপোর্ট ইমেইল'),
+                      subtitle: Text(appSetting.settings.siteEmail!),
+                      trailing: const Icon(Icons.mail_outline, size: 18),
+                      onTap: () => _launchUri('mailto:${appSetting.settings.siteEmail}'),
+                    ),
+                  ],
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.policy_outlined, color: SikhunTheme.primary),
                     title: const Text('গোপনীয়তা নীতি ও শর্তাবলী'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () async {
-                      final uri = Uri.parse('https://sikhun.com/terms');
-                      if (await canLaunchUrl(uri)) launchUrl(uri);
-                    },
+                    onTap: () => _launchUri('https://sikhun.com/terms'),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.info_outline, color: SikhunTheme.primary),
                     title: const Text('অ্যাপ সম্পর্কে'),
-                    subtitle: const Text('Sikhun Mobile v1.0.0'),
+                    subtitle: Text('Sikhun Mobile v${appSetting.settings.appVersion}'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                     onTap: () {
                       showAboutDialog(
                         context: context,
-                        applicationName: 'শিখুন (Sikhun)',
-                        applicationVersion: '1.0.0',
-                        applicationIcon: const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 40),
-                        children: const [
-                          Text('শিখুন বাংলাদেশের একটি আধুনিক স্মার্ট লার্নিং ও রিডিং প্ল্যাটফর্ম।'),
+                        applicationName: appSetting.siteName,
+                        applicationVersion: appSetting.settings.appVersion,
+                        applicationIcon: (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty)
+                            ? CachedNetworkImage(
+                                imageUrl: appSetting.logoUrl!,
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.contain,
+                              )
+                            : const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 40),
+                        children: [
+                          Text('${appSetting.siteTagline}\nশিখুন বাংলাদেশের একটি আধুনিক স্মার্ট লার্নিং ও রিডিং প্ল্যাটফর্ম।'),
                         ],
                       );
                     },
@@ -256,7 +338,29 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            if (auth.isAuthenticated)
+            // Dynamic Branding Footer
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                children: [
+                  if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: appSetting.logoUrl!,
+                      height: 28,
+                      fit: BoxFit.contain,
+                      errorWidget: (c, u, e) => const SizedBox(),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    appSetting.siteTagline,
+                    style: const TextStyle(fontSize: 12, color: SikhunTheme.mutedDark),
+                  ),
+                ],
+              ),
+            ),
+
+            if (auth.isAuthenticated) ...[
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -291,6 +395,7 @@ class ProfileScreen extends StatelessWidget {
                   },
                 ),
               ),
+            ],
 
             const SizedBox(height: 32),
           ],

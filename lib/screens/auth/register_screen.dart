@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/app_setting_provider.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -72,13 +74,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'শিখুন-এ রেজিস্ট্রেশন',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                Center(
+                  child: Consumer<AppSettingProvider>(
+                    builder: (context, appSetting, child) {
+                      if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: CachedNetworkImage(
+                            imageUrl: appSetting.logoUrl!,
+                            height: 48,
+                            fit: BoxFit.contain,
+                            errorWidget: (c, u, e) => const SizedBox(),
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
                   ),
+                ),
+                Consumer<AppSettingProvider>(
+                  builder: (context, appSetting, child) {
+                    return Text(
+                      '${appSetting.siteName}-এ রেজিস্ট্রেশন',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 const Text(

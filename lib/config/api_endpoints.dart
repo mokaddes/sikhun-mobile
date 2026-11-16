@@ -52,6 +52,14 @@ class ApiEndpoints {
 
   // Profile & Settings
   static const String profile = '$baseUrl/profile';
+  static const String settings = '$baseUrl/settings';
+  static const String dashboard = '$baseUrl/dashboard';
   static const String updatePassword = '$baseUrl/profile/password';
   static const String updateTheme = '$baseUrl/profile/theme';
+
+  // Notifications & Push
+  static const String notifications = '$baseUrl/notifications';
+  static String notificationMarkRead(int id) => '$baseUrl/notifications/$id/read';
+  static const String notificationsMarkAllRead = '$baseUrl/notifications/read-all';
+  static const String registerFcmToken = '$baseUrl/profile/fcm-token';
 }
