@@ -7,6 +7,8 @@ import '../../providers/library_provider.dart';
 import '../../providers/blog_provider.dart';
 import '../../providers/app_setting_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../library/book_details_screen.dart';
 import '../library/library_screen.dart';
 import '../blog/blog_list_screen.dart';
@@ -46,6 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final blog = Provider.of<BlogProvider>(context);
     final appSetting = Provider.of<AppSettingProvider>(context);
     final notif = Provider.of<NotificationProvider>(context);
+    final themeProv = Provider.of<ThemeProvider>(context);
+    final localeProv = Provider.of<LocaleProvider>(context);
+    final isDark = themeProv.isDarkMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -92,6 +97,39 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Language Toggle
+          InkWell(
+            onTap: () => localeProv.toggleLocale(),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
+                ),
+              ),
+              child: Text(
+                localeProv.isBengali ? 'বাং' : 'EN',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
+                ),
+              ),
+            ),
+          ),
+          // Theme Toggle
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              size: 20,
+            ),
+            tooltip: isDark ? 'Light Mode' : 'Dark Mode',
+            onPressed: () => themeProv.toggleTheme(),
+          ),
           // Notification Bell with Unread Badge
           Stack(
             alignment: Alignment.center,

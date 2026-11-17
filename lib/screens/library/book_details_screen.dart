@@ -6,6 +6,7 @@ import '../../config/theme.dart';
 import '../../models/book_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/library_provider.dart';
+import '../../services/offline_service.dart';
 import '../auth/login_screen.dart';
 
 class BookDetailsScreen extends StatefulWidget {
@@ -228,6 +229,35 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       appBar: AppBar(
         title: Text(book.title),
         actions: [
+          Consumer<OfflineService>(
+            builder: (context, offlineService, child) {
+              final isDownloaded = offlineService.isBookDownloaded(book.id);
+              return IconButton(
+                icon: Icon(
+                  isDownloaded ? Icons.cloud_done : Icons.cloud_download_outlined,
+                  color: isDownloaded ? SikhunTheme.primary : null,
+                ),
+                tooltip: isDownloaded ? 'অফলাইনে ডাউনলোড করা আছে' : 'অফলাইনের জন্য সেভ করুন',
+                onPressed: () async {
+                  if (isDownloaded) {
+                    await offlineService.removeOfflineBook(book.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('অফলাইন ক্যাশ থেকে সরানো হয়েছে')),
+                      );
+                    }
+                  } else {
+                    await offlineService.saveBookForOffline(book);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('বইটি অফলাইনে পড়ার জন্য সেভ করা হয়েছে')),
+                      );
+                    }
+                  }
+                },
+              );
+            },
+          ),
           IconButton(
             icon: Icon(
               book.inBookshelf ? Icons.bookmark : Icons.bookmark_border,

@@ -45,12 +45,21 @@ class ContinueReadingModel {
     this.progress = 0,
   });
 
+  String get chapterTitle => 'পৃষ্ঠা: $currentPage / $totalPages';
+  double get progressPercent => progress.toDouble();
+
   factory ContinueReadingModel.fromJson(Map<String, dynamic> json) {
+    String? rawCover = json['cover_image']?.toString();
+    if (rawCover != null && !rawCover.startsWith('http')) {
+      final clean = rawCover.startsWith('/') ? rawCover.substring(1) : rawCover;
+      rawCover = 'https://sikhun.com/${clean.startsWith('storage/') ? clean : 'storage/$clean'}';
+    }
+
     return ContinueReadingModel(
       bookId: json['book_id'] ?? 0,
       bookTitle: json['book_title'] ?? 'বই',
       bookSlug: json['book_slug']?.toString(),
-      coverImage: json['cover_image']?.toString(),
+      coverImage: rawCover,
       currentPage: json['current_page'] ?? 1,
       totalPages: json['total_pages'] ?? 1,
       progress: (json['progress'] != null)
@@ -79,6 +88,13 @@ class DashboardDataModel {
     this.activeSubscription,
   });
 
+  double get walletBalance => stats.walletBalance;
+  int get booksOwned => stats.booksOwned;
+  int get examsTaken => stats.examsTaken;
+  int get coursesEnrolled => stats.coursesEnrolled;
+  int get unresolvedMistakes => stats.unresolvedMistakes;
+  String get activeSubscriptionPlan => activeSubscription?['plan']?['name']?.toString() ?? 'স্টার্টার লার্নার';
+
   factory DashboardDataModel.fromJson(Map<String, dynamic> json) {
     return DashboardDataModel(
       stats: json['stats'] != null
@@ -87,15 +103,11 @@ class DashboardDataModel {
       continueReading: json['continue_reading'] != null
           ? ContinueReadingModel.fromJson(json['continue_reading'])
           : null,
-      continueCourse: json['continue_course'] is Map<String, dynamic>
-          ? json['continue_course']
-          : null,
-      recentExams: json['recent_exams'] is List ? json['recent_exams'] : [],
-      leaderboardTop: json['leaderboard_top'] is List ? json['leaderboard_top'] : [],
+      continueCourse: json['continue_course'],
+      recentExams: json['recent_exams'] ?? [],
+      leaderboardTop: json['leaderboard_top'] ?? [],
       myRank: json['my_rank'],
-      activeSubscription: json['active_subscription'] is Map<String, dynamic>
-          ? json['active_subscription']
-          : null,
+      activeSubscription: json['active_subscription'],
     );
   }
 }

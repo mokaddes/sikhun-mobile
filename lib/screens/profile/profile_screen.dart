@@ -6,6 +6,9 @@ import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_setting_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../services/offline_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 import '../dashboard/student_dashboard_screen.dart';
@@ -34,6 +37,9 @@ class ProfileScreen extends StatelessWidget {
     final auth = Provider.of<AuthProvider>(context);
     final appSetting = Provider.of<AppSettingProvider>(context);
     final notifProv = Provider.of<NotificationProvider>(context);
+    final themeProv = Provider.of<ThemeProvider>(context);
+    final localeProv = Provider.of<LocaleProvider>(context);
+    final offlineService = Provider.of<OfflineService>(context);
     final user = auth.user;
 
     return Scaffold(
@@ -262,6 +268,65 @@ class ProfileScreen extends StatelessWidget {
                         MaterialPageRoute(builder: (_) => const NotificationScreen()),
                       );
                     },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // App Appearance, Language & Offline Settings
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      themeProv.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                      color: const Color(0xFF8A5A32),
+                    ),
+                    title: Text(localeProv.isBengali ? 'ডার্ক মোড (Dark Theme)' : 'Dark Theme'),
+                    subtitle: Text(
+                      themeProv.isDarkMode
+                          ? (localeProv.isBengali ? 'অন করা আছে' : 'Enabled')
+                          : (localeProv.isBengali ? 'অফ করা আছে (ওয়ার্ম পেপার থিম)' : 'Disabled (Warm Paper Theme)'),
+                    ),
+                    trailing: Switch(
+                      value: themeProv.isDarkMode,
+                      activeTrackColor: const Color(0xFF8A5A32),
+                      onChanged: (val) => themeProv.toggleTheme(),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.language_outlined, color: Color(0xFF8A5A32)),
+                    title: Text(localeProv.isBengali ? 'ভাষা পরিবর্তন (Language)' : 'Language (ভাষা)'),
+                    subtitle: Text(localeProv.isBengali ? 'বাংলা (Bangla)' : 'English'),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8A5A32).withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        localeProv.isBengali ? 'বাং' : 'EN',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8A5A32)),
+                      ),
+                    ),
+                    onTap: () => localeProv.toggleLocale(),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.cloud_off_outlined, color: Color(0xFF8A5A32)),
+                    title: Text(localeProv.t('offline.mode')),
+                    subtitle: Text(
+                      '${offlineService.offlineBooks.length} ${localeProv.isBengali ? 'টি বই সেভ করা আছে' : 'books cached'}',
+                    ),
+                    trailing: Switch(
+                      value: offlineService.isOfflineMode,
+                      activeTrackColor: const Color(0xFF8A5A32),
+                      onChanged: (val) => offlineService.setOfflineMode(val),
+                    ),
                   ),
                 ],
               ),

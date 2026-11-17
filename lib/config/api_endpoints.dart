@@ -36,6 +36,7 @@ class ApiEndpoints {
   static String courseDetails(String slug) => '$baseUrl/courses/$slug';
 
   // AI Chat
+  static const String aiChat = '$baseUrl/ai/chat';
   static const String aiSessions = '$baseUrl/ai/chat/sessions';
   static String aiSessionMessages(int sessionId) =>
       '$baseUrl/ai/chat/sessions/$sessionId/message';

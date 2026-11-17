@@ -25,9 +25,9 @@ class ChapterModel {
 
   factory ChapterModel.fromJson(Map<String, dynamic> json) {
     return ChapterModel(
-      id: json['id'] ?? 0,
-      bookId: json['book_id'] ?? 0,
-      title: json['title'] ?? json['name'] ?? 'Chapter',
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      bookId: json['book_id'] is int ? json['book_id'] : int.tryParse(json['book_id']?.toString() ?? '0') ?? 0,
+      title: json['title']?.toString() ?? json['name']?.toString() ?? 'অধ্যায়',
       chapterNumber: json['chapter_number'] ?? json['order'] ?? 1,
       pageStart: json['page_start'] ?? json['start_page'] ?? 1,
       pageEnd: json['page_end'] ?? json['end_page'] ?? 1,
@@ -85,27 +85,63 @@ class BookModel {
   });
 
   factory BookModel.fromJson(Map<String, dynamic> json) {
+    // 1. Author Resolution (handle String, Map {id, name}, or null)
+    String parsedAuthor = 'শিখুন';
+    if (json['author'] is Map) {
+      parsedAuthor = json['author']['name']?.toString() ?? 'শিখুন';
+    } else if (json['author'] is String && json['author'].toString().isNotEmpty) {
+      parsedAuthor = json['author'].toString();
+    }
+
+    // 2. Publisher Resolution
+    String parsedPublisher = 'শিখুন প্রকাশনী';
+    if (json['publication'] is Map) {
+      parsedPublisher = json['publication']['name']?.toString() ?? 'শিখুন প্রকাশনী';
+    } else if (json['publisher'] is Map) {
+      parsedPublisher = json['publisher']['name']?.toString() ?? 'শিখুন প্রকাশনী';
+    } else if (json['publisher'] is String && json['publisher'].toString().isNotEmpty) {
+      parsedPublisher = json['publisher'].toString();
+    }
+
+    // 3. Cover Image Resolution (ensure full URL with https://sikhun.com/storage/)
+    String? rawCover = json['cover_image_url']?.toString() ??
+        json['cover_url']?.toString() ??
+        json['cover_image']?.toString();
+    String? resolvedCover;
+    if (rawCover != null && rawCover.isNotEmpty) {
+      if (rawCover.startsWith('http')) {
+        resolvedCover = rawCover;
+      } else {
+        final cleanPath = rawCover.startsWith('/') ? rawCover.substring(1) : rawCover;
+        if (cleanPath.startsWith('storage/')) {
+          resolvedCover = 'https://sikhun.com/$cleanPath';
+        } else {
+          resolvedCover = 'https://sikhun.com/storage/$cleanPath';
+        }
+      }
+    }
+
     var rawChapters = json['chapters'] as List?;
     List<ChapterModel> chapterList = rawChapters != null
-        ? rawChapters.map((c) => ChapterModel.fromJson(c)).toList()
+        ? rawChapters.map((c) => ChapterModel.fromJson(c as Map<String, dynamic>)).toList()
         : [];
 
     return BookModel(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      title: json['title']?.toString() ?? '',
       slug: json['slug']?.toString(),
       description: json['description']?.toString(),
-      author: json['author']?.toString() ?? 'শিখুন',
-      publisher: json['publisher']?.toString() ?? 'শিখুন প্রকাশনী',
+      author: parsedAuthor,
+      publisher: parsedPublisher,
       subject: json['subject']?.toString(),
-      gradeLevel: json['grade_level']?.toString() ?? json['class']?.toString(),
+      gradeLevel: json['grade_level']?.toString() ?? json['class']?.toString() ?? json['level']?.toString(),
       price: (json['price'] != null)
           ? double.tryParse(json['price'].toString()) ?? 0.0
           : 0.0,
       discountPrice: (json['discount_price'] != null)
           ? double.tryParse(json['discount_price'].toString())
           : null,
-      coverImage: json['cover_image']?.toString() ?? json['cover_url']?.toString(),
+      coverImage: resolvedCover,
       totalPages: json['total_pages'] ?? json['pages_count'] ?? 0,
       isFree: json['is_free'] == true || json['is_free'] == 1 || (json['price'] != null && (double.tryParse(json['price'].toString()) ?? 0.0) == 0.0),
       isPurchased: json['is_purchased'] == true || json['purchased'] == true,
