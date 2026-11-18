@@ -56,17 +56,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final notif = Provider.of<NotificationProvider>(context);
     final themeProv = Provider.of<ThemeProvider>(context);
 
-    final setting = appSetting.setting;
     final canSeeQuestionBank = !auth.isAuthenticated || (auth.user?.canAccessQuestionBank ?? true);
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
         title: SikhunBrandLogo(
-          compact: true,
-          markSize: 32,
-          customTitle: setting.title,
-          customTagline: setting.subtitle,
+          compact: false,
+          showTagline: false,
+          markSize: 30,
+          customTitle: appSetting.siteName,
+          customTagline: appSetting.siteTagline,
         ),
         actions: [
           IconButton(
