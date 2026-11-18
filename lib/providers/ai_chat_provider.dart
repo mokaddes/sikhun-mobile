@@ -3,20 +3,57 @@ import '../config/api_endpoints.dart';
 import '../models/ai_chat_model.dart';
 import '../services/api_service.dart';
 
+class AiChatSessionSummary {
+  final int id;
+  final String title;
+  final String sourceType;
+  final int? sourceBookId;
+  final int? sourceMyBookId;
+  final String? createdAt;
+
+  AiChatSessionSummary({
+    required this.id,
+    required this.title,
+    this.sourceType = 'none',
+    this.sourceBookId,
+    this.sourceMyBookId,
+    this.createdAt,
+  });
+
+  factory AiChatSessionSummary.fromJson(Map<String, dynamic> json) {
+    return AiChatSessionSummary(
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      title: (json['title'] ?? 'নতুন চ্যাট').toString(),
+      sourceType: (json['source_type'] ?? 'none').toString(),
+      sourceBookId: json['source_book_id'] is int ? json['source_book_id'] : int.tryParse(json['source_book_id']?.toString() ?? ''),
+      sourceMyBookId: json['source_my_book_id'] is int ? json['source_my_book_id'] : int.tryParse(json['source_my_book_id']?.toString() ?? ''),
+      createdAt: json['created_at']?.toString(),
+    );
+  }
+}
+
 class AiChatProvider extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
+  List<AiChatSessionSummary> _sessions = [];
   bool _isTyping = false;
+  bool _isLoadingSessions = false;
   int? _activeBookId;
+  int? _activeMyBookId;
   int? _activePageNumber;
   String? _activeBookTitle;
   int? _currentSessionId;
+  String? _errorMessage;
 
   List<ChatMessage> get messages => _messages;
+  List<AiChatSessionSummary> get sessions => _sessions;
   bool get isTyping => _isTyping;
+  bool get isLoadingSessions => _isLoadingSessions;
   int? get activeBookId => _activeBookId;
+  int? get activeMyBookId => _activeMyBookId;
   int? get activePageNumber => _activePageNumber;
   String? get activeBookTitle => _activeBookTitle;
   int? get currentSessionId => _currentSessionId;
+  String? get errorMessage => _errorMessage;
 
   AiChatProvider() {
     _initWelcome();
@@ -27,7 +64,7 @@ class AiChatProvider extends ChangeNotifier {
       _messages.add(
         ChatMessage(
           id: 'welcome_1',
-          content: 'স্বাগতম! আমি শিখুন AI টিউটর। যেকোনো অধ্যায়, কঠিন টপিক বা বইয়ের নির্দিষ্ট পাতা সম্পর্কে আমাকে প্রশ্ন করতে পারেন।',
+          content: 'স্বাগতম! আমি শিখুন AI টিউটর। যেকোনো অধ্যায়, কঠিন টপিক বা আপনার বইয়ের নির্দিষ্ট পাতা সম্পর্কে আমাকে প্রশ্ন করতে পারেন।',
           isUser: false,
           timestamp: DateTime.now(),
         ),
@@ -35,8 +72,9 @@ class AiChatProvider extends ChangeNotifier {
     }
   }
 
-  void setContext({int? bookId, int? pageNumber, String? bookTitle}) {
+  void setContext({int? bookId, int? myBookId, int? pageNumber, String? bookTitle}) {
     _activeBookId = bookId;
+    _activeMyBookId = myBookId;
     _activePageNumber = pageNumber;
     _activeBookTitle = bookTitle;
     notifyListeners();
@@ -44,16 +82,112 @@ class AiChatProvider extends ChangeNotifier {
 
   void clearContext() {
     _activeBookId = null;
+    _activeMyBookId = null;
     _activePageNumber = null;
     _activeBookTitle = null;
     notifyListeners();
+  }
+
+  Future<void> fetchSessions() async {
+    final token = await ApiService.getToken();
+    if (token == null || token.isEmpty) return;
+
+    _isLoadingSessions = true;
+    notifyListeners();
+
+    final res = await ApiService.get(ApiEndpoints.aiSessions);
+    _isLoadingSessions = false;
+
+    if (res.success && res.data is List) {
+      _sessions = (res.data as List)
+          .whereType<Map<String, dynamic>>()
+          .map(AiChatSessionSummary.fromJson)
+          .toList();
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadSession(int sessionId) async {
+    final res = await ApiService.get(ApiEndpoints.aiSession(sessionId));
+    if (res.success && res.data is Map<String, dynamic>) {
+      final data = res.data as Map<String, dynamic>;
+      _currentSessionId = sessionId;
+      _activeBookId = data['source_book_id'] is int ? data['source_book_id'] : int.tryParse(data['source_book_id']?.toString() ?? '');
+      _activeMyBookId = data['source_my_book_id'] is int ? data['source_my_book_id'] : int.tryParse(data['source_my_book_id']?.toString() ?? '');
+      _messages.clear();
+      if (data['messages'] is List) {
+        int i = 0;
+        for (final m in data['messages'] as List) {
+          if (m is Map) {
+            _messages.add(ChatMessage(
+              id: 's_${sessionId}_${i++}',
+              content: (m['content'] ?? '').toString(),
+              isUser: (m['role'] ?? '') == 'user',
+              timestamp: DateTime.now(),
+            ));
+          }
+        }
+      }
+      if (_messages.isEmpty) _initWelcome();
+      notifyListeners();
+    }
+  }
+
+  Future<void> renameSession(int sessionId, String title) async {
+    final res = await ApiService.patch(ApiEndpoints.aiSession(sessionId), body: {'title': title});
+    if (res.success) {
+      await fetchSessions();
+    }
+  }
+
+  Future<void> deleteSession(int sessionId) async {
+    final res = await ApiService.delete(ApiEndpoints.aiSession(sessionId));
+    if (res.success) {
+      if (_currentSessionId == sessionId) {
+        clearChat();
+      }
+      _sessions.removeWhere((s) => s.id == sessionId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> attachBookToCurrentSession({int? bookId, int? myBookId, String? title}) async {
+    setContext(bookId: bookId, myBookId: myBookId, bookTitle: title);
+    if (_currentSessionId != null) {
+      await ApiService.patch(
+        ApiEndpoints.aiSessionBook(_currentSessionId!),
+        body: {
+          'source_book_id': bookId,
+          'source_my_book_id': myBookId,
+        },
+      );
+    }
   }
 
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    final userMsg = ChatMessage(
+    _errorMessage = null;
+    final token = await ApiService.getToken();
+    if (token == null || token.isEmpty) {
+      _messages.add(ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        content: trimmed,
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
+      _messages.add(ChatMessage(
+        id: '${DateTime.now().millisecondsSinceEpoch}_auth',
+        content: 'শিখুন AI টিউটর ব্যবহার করতে অনুগ্রহ করে আপনার অ্যাকাউন্টে লগইন করুন।',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+      notifyListeners();
+      return;
+    }
+
+    _messages.add(ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: trimmed,
       isUser: true,
@@ -61,92 +195,89 @@ class AiChatProvider extends ChangeNotifier {
       bookId: _activeBookId,
       pageNumber: _activePageNumber,
       bookTitle: _activeBookTitle,
-    );
+    ));
 
-    _messages.add(userMsg);
+    final botId = '${DateTime.now().millisecondsSinceEpoch}_bot';
+    _messages.add(ChatMessage(
+      id: botId,
+      content: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      bookId: _activeBookId,
+      pageNumber: _activePageNumber,
+    ));
+
     _isTyping = true;
     notifyListeners();
 
     try {
-      final body = <String, dynamic>{
-        'message': trimmed,
-      };
-      if (_activeBookId != null) body['book_id'] = _activeBookId;
-      if (_activePageNumber != null) body['page_number'] = _activePageNumber;
-      if (_currentSessionId != null) body['session_id'] = _currentSessionId;
-
-      final response = await ApiService.post(
-        ApiEndpoints.aiChat,
-        body: body,
-      );
-
-      _isTyping = false;
-
-      String replyText = '';
-      if (response.success && response.data != null) {
-        final data = response.data;
-        if (data is Map) {
-          replyText = data['reply']?.toString() ??
-              data['message']?.toString() ??
-              data['content']?.toString() ??
-              '';
-          if (data['session_id'] != null) {
-            _currentSessionId = int.tryParse(data['session_id'].toString());
-          }
+      // Create a session if none is active
+      if (_currentSessionId == null) {
+        final createRes = await ApiService.post(
+          ApiEndpoints.aiSessions,
+          body: {
+            if (_activeBookId != null) 'source_book_id': _activeBookId,
+            if (_activeMyBookId != null) 'source_my_book_id': _activeMyBookId,
+            'title': trimmed.length > 48 ? '${trimmed.substring(0, 48)}...' : trimmed,
+          },
+        );
+        if (createRes.success && createRes.data is Map && createRes.data['id'] != null) {
+          _currentSessionId = int.tryParse(createRes.data['id'].toString());
+          fetchSessions();
+        } else {
+          _isTyping = false;
+          _updateBotMessage(botId, createRes.message ?? 'AI সেশন তৈরি করা যায়নি।');
+          return;
         }
       }
 
-      // If empty reply from server or network issue, generate a helpful Bengali answer
-      if (replyText.trim().isEmpty) {
-        replyText = _generateHelpfulFallback(trimmed);
+      if (_currentSessionId != null) {
+        final buffer = StringBuffer();
+        await for (final event in ApiService.postSseStream(
+          ApiEndpoints.aiSessionMessages(_currentSessionId!),
+          body: {'message': trimmed},
+        )) {
+          if (event['error'] != null) {
+            buffer.clear();
+            buffer.write(event['error'].toString());
+            break;
+          }
+          final delta = event['content']?.toString() ?? '';
+          if (delta.isNotEmpty) {
+            buffer.write(delta);
+            _updateBotMessage(botId, buffer.toString());
+          }
+          if (event['done'] == true) {
+            break;
+          }
+        }
+        if (buffer.isEmpty) {
+          _updateBotMessage(botId, 'উত্তর পাওয়া যায়নি। কিছুক্ষণ পর আবার চেষ্টা করুন।');
+        }
       }
-
-      _messages.add(
-        ChatMessage(
-          id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-          content: replyText,
-          isUser: false,
-          timestamp: DateTime.now(),
-          bookId: _activeBookId,
-          pageNumber: _activePageNumber,
-        ),
-      );
     } catch (e) {
+      _updateBotMessage(botId, 'AI সংযোগে সাময়িক ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+    } finally {
       _isTyping = false;
-      _messages.add(
-        ChatMessage(
-          id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-          content: _generateHelpfulFallback(trimmed),
-          isUser: false,
-          timestamp: DateTime.now(),
-          bookId: _activeBookId,
-          pageNumber: _activePageNumber,
-        ),
-      );
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
-  String _generateHelpfulFallback(String question) {
-    final q = question.toLowerCase();
-    if (q.contains('মায়োসিস') || q.contains('মেয়োসিস') || q.contains('meiosis')) {
-      return '''**মায়োসিস (Meiosis) কোষ বিভাজনের গুরুত্ব:**
-
-১. **জননকোষ সৃষ্টি:** মায়োসিস বিভাজনের মাধ্যমে জীবের পুং ও স্ত্রী জননকোষ (শুক্রাণু ও ডিম্বাণু) তৈরি হয়।
-২. **ক্রোমোজোম সংখ্যা ধ্রুব রাখা:** এ প্রক্রিয়ায় ক্রোমোজোম সংখ্যা হ্রাস পেয়ে অর্ধেক (n বা হ্যাপ্লয়েড) হয়। ফলে নিষেকের পর জাইগোটে ক্রোমোজোম সংখ্যা আবার মাতৃকোষের সমান (2n) বজায় থাকে।
-৩. **জিনগত বৈচিত্র্য (Crossing Over):** মায়োসিস-১ এর প্রফেজ-১ দশায় ক্রসিং ওভারের মাধ্যমে জিনের বিনিময় ঘটে, যা জীবের মধ্যে নতুন বৈশিষ্ট্য ও প্রজাতির বৈচিত্র্য সৃষ্টি করে।
-৪. **অভিযোজন ও বিবর্তন:** জিনগত বৈচিত্র্যের ফলে জীব পরিবেশের সাথে খাপ খাইয়ে টিকে থাকতে সক্ষম হয় এবং বিবর্তনের পথ সুগম করে।''';
-    } else if (q.contains('মাইটোটিক') || q.contains('মাইটোসিস') || q.contains('mitosis')) {
-      return '''**মাইটোসিস (Mitosis) বিভাজনের গুরুত্ব:**
-
-১. **শারীরিক বৃদ্ধি:** এককোষী জাইগোট থেকে বহুকোষী পূর্ণাঙ্গ জীবদেহের বিকাশ ঘটে।
-২. **ক্ষতিপূরণ ও পুনরুৎপাদন:** ক্ষয়প্রাপ্ত কোষ মেরামত এবং নতুন কোষ তৈরি করে ক্ষতস্থান নিরাময় করে।
-৩. **নির্দিষ্ট আকার-আকৃতি বজায় রাখা:** প্রতিটি প্রজাতির কোষের নির্দিষ্ট আয়তন ও আকৃতি রক্ষা করে।
-৪. **গুণগত বৈশিষ্ট্যের স্থায়িত্ব:** অপত্য কোষ মাতৃকোষের হুবহু সদৃশ হয়।''';
+  void _updateBotMessage(String botId, String content) {
+    final idx = _messages.indexWhere((m) => m.id == botId);
+    if (idx != -1) {
+      final old = _messages[idx];
+      _messages[idx] = ChatMessage(
+        id: old.id,
+        content: content,
+        isUser: false,
+        timestamp: old.timestamp,
+        bookId: old.bookId,
+        pageNumber: old.pageNumber,
+        bookTitle: old.bookTitle,
+      );
+      notifyListeners();
     }
-
-    return 'আপনার প্রশ্নটি গৃহীত হয়েছে: "$question"। শিখুন এআই টিউটর আপনার বিষয়টি বিশ্লেষণ করছে। এ বিষয়ে পাঠ্যবইয়ের সংশ্লিষ্ট অধ্যায়টি রিভিশন দিতে পারেন বা আরও সুনির্দিষ্ট তথ্য চাইলে প্রশ্ন করুন।';
   }
 
   void clearChat() {

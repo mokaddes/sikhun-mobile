@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/app_setting_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../widgets/sikhun_brand_logo.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -32,21 +32,84 @@ class _LoginScreenState extends State<LoginScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.login(
       _emailController.text.trim(),
-      _passwordController.text.trim(),
+      _passwordController.text,
     );
 
     if (success && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     }
+  }
+
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    bool sending = false;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: const Text('পাসওয়ার্ড রিসেট'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'আপনার নিবন্ধিত ইমেইল লিখুন। আমরা পাসওয়ার্ড রিসেট লিংক পাঠিয়ে দেব।',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'ইমেইল ঠিকানা',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('বাতিল'),
+            ),
+            ElevatedButton(
+              onPressed: sending
+                  ? null
+                  : () async {
+                      final email = emailCtrl.text.trim();
+                      if (email.isEmpty) return;
+                      setModalState(() => sending = true);
+                      final res = await Provider.of<AuthProvider>(this.context, listen: false)
+                          .forgotPassword(email);
+                      setModalState(() => sending = false);
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              res.message ?? 'পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে।',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+              child: sending
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('লিংক পাঠান'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final localeProv = Provider.of<LocaleProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('লগইন করুন'),
+        title: Text(localeProv.isBengali ? 'লগইন করুন' : 'Login'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -56,67 +119,27 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 20),
-                Center(
-                  child: Consumer<AppSettingProvider>(
-                    builder: (context, appSetting, child) {
-                      if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty) {
-                        return CachedNetworkImage(
-                          imageUrl: appSetting.logoUrl!,
-                          height: 56,
-                          fit: BoxFit.contain,
-                          errorWidget: (c, u, e) => Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: SikhunTheme.primary.withAlpha(25),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.auto_stories,
-                              size: 48,
-                              color: SikhunTheme.primary,
-                            ),
-                          ),
-                        );
-                      }
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: SikhunTheme.primary.withAlpha(25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.auto_stories,
-                          size: 56,
-                          color: SikhunTheme.primary,
-                        ),
-                      );
-                    },
-                  ),
-                ),
                 const SizedBox(height: 16),
-                Consumer<AppSettingProvider>(
-                  builder: (context, appSetting, child) {
-                    return Text(
-                      '${appSetting.siteName}-এ স্বাগতম',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'আপনার অ্যাকাউন্টে প্রবেশ করে পড়াশোনা চালিয়ে যান',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: SikhunTheme.mutedDark,
+                Center(
+                  child: SikhunBrandLogo(
+                    isBangla: localeProv.isBengali,
+                    markSize: 52,
+                    showTagline: true,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
+                Text(
+                  localeProv.isBengali ? 'আপনার অ্যাকাউন্টে স্বাগতম' : 'Welcome Back to Sikhun',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'আপনার অ্যাকাউন্টে প্রবেশ করে পড়াশোনা চালিয়ে যান',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: SikhunTheme.mutedDark),
+                ),
+                const SizedBox(height: 28),
 
                 if (auth.errorMessage != null)
                   Container(
@@ -124,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: SikhunTheme.danger.withAlpha(25),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: SikhunTheme.danger.withAlpha(75)),
                     ),
                     child: Text(
@@ -137,12 +160,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'ইমেইল বা ফোন',
+                    labelText: 'ইমেইল ঠিকানা',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'ইমেইল বা ফোন লিখুন';
+                      return 'ইমেইল লিখুন';
                     }
                     return null;
                   },
@@ -156,38 +179,42 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: 'পাসওয়ার্ড',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'কমপক্ষে ৬ ডিজিটের পাসওয়ার্ড দিন';
+                    if (value == null || value.isEmpty) {
+                      return 'পাসওয়ার্ড দিন';
                     }
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    child: const Text('পাসওয়ার্ড ভুলে গেছেন?'),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 ElevatedButton(
                   onPressed: auth.isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SikhunTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   child: auth.isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Text(
-                          'লগইন',
+                          'লগইন করুন',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                 ),

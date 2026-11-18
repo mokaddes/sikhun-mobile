@@ -82,13 +82,13 @@ class _BlogListScreenState extends State<BlogListScreen> {
                     ),
                   ),
                   ...blog.categories.map((cat) {
-                    final isSel = blog.selectedCategory == cat;
+                    final isSel = blog.selectedCategory == cat.slug;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
-                        label: Text(cat),
+                        label: Text(cat.name),
                         selected: isSel,
-                        onSelected: (_) => blog.setCategory(cat),
+                        onSelected: (_) => blog.setCategory(cat.slug),
                       ),
                     );
                   }),

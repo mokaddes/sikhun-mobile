@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/app_setting_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../widgets/sikhun_brand_logo.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -21,12 +21,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _passwordConfirmController = TextEditingController();
 
-  String _selectedSegment = 'HSC';
-  final List<Map<String, String>> _segments = [
-    {'label': 'এইচএসসি (HSC)', 'value': 'HSC'},
-    {'label': 'এসএসসি (SSC)', 'value': 'SSC'},
-    {'label': 'বিশ্ববিদ্যালয় ভর্তি', 'value': 'ADMISSION'},
-    {'label': 'চাকরি প্রস্তুতি (Job)', 'value': 'JOB'},
+  String _selectedSegment = 'admission';
+  final List<Map<String, String>> _segments = const [
+    {'label': 'বিশ্ববিদ্যালয় ভর্তি প্রস্তুতি (DU, RU, BUET, Medical, GST)', 'value': 'admission'},
+    {'label': 'বিসিএস ও সরকারি/ব্যাংক চাকরি প্রস্তুতি (Job)', 'value': 'job'},
+    {'label': 'উচ্চ মাধ্যমিক (HSC)', 'value': 'hsc'},
+    {'label': 'মাধ্যমিক (SSC)', 'value': 'ssc'},
+    {'label': 'বিশ্ববিদ্যালয় অ্যাকাডেমিক (University)', 'value': 'university'},
   ];
 
   @override
@@ -46,25 +47,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final success = await authProvider.register(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-      passwordConfirmation: _passwordConfirmController.text.trim(),
+      password: _passwordController.text,
+      passwordConfirmation: _passwordConfirmController.text,
       phone: _phoneController.text.trim(),
       studentType: _selectedSegment,
-      educationLevel: _selectedSegment,
     );
 
     if (success && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final localeProv = Provider.of<LocaleProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('নতুন অ্যাকাউন্ট তৈরি করুন'),
+        title: Text(localeProv.isBengali ? 'নতুন অ্যাকাউন্ট তৈরি করুন' : 'Create Account'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -75,45 +76,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
-                  child: Consumer<AppSettingProvider>(
-                    builder: (context, appSetting, child) {
-                      if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: CachedNetworkImage(
-                            imageUrl: appSetting.logoUrl!,
-                            height: 48,
-                            fit: BoxFit.contain,
-                            errorWidget: (c, u, e) => const SizedBox(),
-                          ),
-                        );
-                      }
-                      return const SizedBox();
-                    },
+                  child: SikhunBrandLogo(
+                    isBangla: localeProv.isBengali,
+                    markSize: 44,
+                    showTagline: true,
                   ),
                 ),
-                Consumer<AppSettingProvider>(
-                  builder: (context, appSetting, child) {
-                    return Text(
-                      '${appSetting.siteName}-এ রেজিস্ট্রেশন',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'একটি অ্যাকাউন্টে বই, অধ্যায়, প্রশ্নব্যাংক ও এআই টিউটর সুবিধা পান',
+                const SizedBox(height: 16),
+                Text(
+                  localeProv.isBengali ? 'শিখুনে রেজিস্ট্রেশন' : 'Register on Sikhun',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: SikhunTheme.mutedDark,
-                  ),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 6),
+                const Text(
+                  'একটি অ্যাকাউন্টে বই, অধ্যায়, প্রশ্নব্যাংক ও এআই টিউটর সুবিধা পান',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: SikhunTheme.mutedDark),
+                ),
+                const SizedBox(height: 22),
 
                 if (auth.errorMessage != null)
                   Container(
@@ -121,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: SikhunTheme.danger.withAlpha(25),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: SikhunTheme.danger.withAlpha(75)),
                     ),
                     child: Text(
@@ -136,12 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'আপনার নাম',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'নাম লিখুন';
-                    }
-                    return null;
-                  },
+                  validator: (value) => (value == null || value.trim().isEmpty) ? 'নাম লিখুন' : null,
                 ),
                 const SizedBox(height: 14),
 
@@ -153,12 +129,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'ইমেইল লিখুন';
-                    }
-                    if (!value.contains('@')) {
-                      return 'সঠিক ইমেইল ঠিকানা দিন';
-                    }
+                    if (value == null || value.trim().isEmpty) return 'ইমেইল লিখুন';
+                    if (!value.contains('@')) return 'সঠিক ইমেইল ঠিকানা দিন';
                     return null;
                   },
                 ),
@@ -176,22 +148,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 DropdownButtonFormField<String>(
                   initialValue: _selectedSegment,
+                  isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'শিক্ষার্থী স্তর / ক্যাটাগরি',
+                    labelText: 'শিক্ষা লক্ষ্য / ক্যাটাগরি',
                     prefixIcon: Icon(Icons.school_outlined),
                   ),
-                  items: _segments.map((seg) {
-                    return DropdownMenuItem<String>(
-                      value: seg['value'],
-                      child: Text(seg['label']!),
-                    );
-                  }).toList(),
+                  items: _segments
+                      .map((seg) => DropdownMenuItem<String>(
+                            value: seg['value'],
+                            child: Text(
+                              seg['label']!,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ))
+                      .toList(),
                   onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _selectedSegment = val;
-                      });
-                    }
+                    if (val != null) setState(() => _selectedSegment = val);
                   },
                 ),
                 const SizedBox(height: 14),
@@ -200,12 +173,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: 'পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)',
+                    labelText: 'পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)',
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'কমপক্ষে ৬ ডিজিটের পাসওয়ার্ড দিন';
+                    if (value == null || value.length < 8) {
+                      return 'কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড দিন';
                     }
                     return null;
                   },
@@ -230,14 +203,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 ElevatedButton(
                   onPressed: auth.isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SikhunTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   child: auth.isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Text(
                           'অ্যাকাউন্ট তৈরি করুন',
@@ -258,10 +234,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       },
                       child: const Text(
                         'লগইন করুন',
-                        style: TextStyle(
-                          color: SikhunTheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: SikhunTheme.primary, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],

@@ -1,21 +1,28 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/library_provider.dart';
-import '../../providers/blog_provider.dart';
 import '../../providers/app_setting_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/blog_provider.dart';
+import '../../providers/library_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/theme_provider.dart';
-import '../../providers/locale_provider.dart';
+import '../../widgets/sikhun_brand_logo.dart';
+import '../ai_chat/ai_chat_screen.dart';
+import '../auth/login_screen.dart';
+import '../blog/blog_details_screen.dart';
+import '../blog/blog_list_screen.dart';
+import '../bookshelf/bookshelf_screen.dart';
+import '../courses/courses_screen.dart';
+import '../dashboard/student_dashboard_screen.dart';
+import '../exams/exams_screen.dart';
 import '../library/book_details_screen.dart';
 import '../library/library_screen.dart';
-import '../blog/blog_list_screen.dart';
-import '../blog/blog_details_screen.dart';
-import '../auth/login_screen.dart';
-import '../dashboard/student_dashboard_screen.dart';
 import '../notifications/notification_screen.dart';
+import '../plans/plans_screen.dart';
+import '../portals/portals_screen.dart';
+import '../question_bank/question_bank_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,114 +36,51 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final lib = Provider.of<LibraryProvider>(context, listen: false);
-      final blog = Provider.of<BlogProvider>(context, listen: false);
-      final appSetting = Provider.of<AppSettingProvider>(context, listen: false);
-      final notif = Provider.of<NotificationProvider>(context, listen: false);
-      lib.fetchBooks();
-      lib.fetchBookshelf();
-      blog.fetchBlogs();
-      appSetting.fetchSettings();
-      notif.fetchNotifications(silent: true);
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      Provider.of<AppSettingProvider>(context, listen: false).fetchSettings();
+      Provider.of<LibraryProvider>(context, listen: false).fetchBooks();
+      if (auth.isAuthenticated) {
+        Provider.of<LibraryProvider>(context, listen: false).fetchBookshelf();
+        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(silent: true);
+      }
+      Provider.of<BlogProvider>(context, listen: false).init();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final appSetting = Provider.of<AppSettingProvider>(context);
     final lib = Provider.of<LibraryProvider>(context);
     final blog = Provider.of<BlogProvider>(context);
-    final appSetting = Provider.of<AppSettingProvider>(context);
     final notif = Provider.of<NotificationProvider>(context);
     final themeProv = Provider.of<ThemeProvider>(context);
-    final localeProv = Provider.of<LocaleProvider>(context);
-    final isDark = themeProv.isDarkMode;
+
+    final setting = appSetting.setting;
+    final canSeeQuestionBank = !auth.isAuthenticated || (auth.user?.canAccessQuestionBank ?? true);
 
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 12,
-        title: Row(
-          children: [
-            if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: appSetting.logoUrl!,
-                height: 32,
-                fit: BoxFit.contain,
-                placeholder: (c, u) => Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: SikhunTheme.primary.withAlpha(30),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 18),
-                ),
-                errorWidget: (c, u, e) => Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: SikhunTheme.primary.withAlpha(30),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 20),
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: SikhunTheme.primary.withAlpha(30),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 20),
-              ),
-            const SizedBox(width: 8),
-            Text(
-              appSetting.siteName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
-            ),
-          ],
+        titleSpacing: 16,
+        title: SikhunBrandLogo(
+          compact: true,
+          markSize: 32,
+          customTitle: setting.title,
+          customTagline: setting.subtitle,
         ),
         actions: [
-          // Language Toggle
-          InkWell(
-            onTap: () => localeProv.toggleLocale(),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-                ),
-              ),
-              child: Text(
-                localeProv.isBengali ? 'বাং' : 'EN',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
-                ),
-              ),
-            ),
-          ),
-          // Theme Toggle
           IconButton(
             icon: Icon(
-              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              themeProv.isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
               size: 20,
             ),
-            tooltip: isDark ? 'Light Mode' : 'Dark Mode',
             onPressed: () => themeProv.toggleTheme(),
           ),
-          // Notification Bell with Unread Badge
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                tooltip: 'নোটিফিকেশন',
+                icon: const Icon(Icons.notifications_none, size: 22),
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const NotificationScreen()),
@@ -156,20 +100,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
                       '${notif.unreadCount > 99 ? '99+' : notif.unreadCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 ),
             ],
           ),
-
-          if (auth.isAuthenticated) ...[
-            // Web-style brown Dashboard Button
+          if (auth.isAuthenticated)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ElevatedButton.icon(
@@ -179,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF78350F), // warm brown from web
+                  backgroundColor: SikhunTheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   minimumSize: const Size(0, 34),
@@ -189,8 +127,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.dashboard_outlined, size: 16),
                 label: const Text('ড্যাশবোর্ড', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
-            ),
-          ] else
+            )
+          else
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: TextButton(
@@ -219,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hero Greeting Banner
+              // Hero Banner
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
@@ -264,93 +202,150 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: 6),
                                 Text(
                                   auth.isAuthenticated
-                                      ? 'ক্যাটাগরি: ${auth.user!.studentType ?? "সাধারণ"} • আপনার পড়াশোনা এগিয়ে নিন'
-                                      : 'বইয়ের পাতায় এআই টিউটর, অধ্যায়ভিত্তিক স্টাডি এবং স্মার্ট প্রশ্নব্যাংক',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
+                                      ? 'ক্যাটাগরি: ${auth.user!.typeLabelBn} • আপনার পড়াশোনা এগিয়ে নিন'
+                                      : 'বইয়ের পাতায় এআই টিউটর, অধ্যায়ভিত্তিক স্টাডি ও স্মার্ট প্রশ্নব্যাংক',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withAlpha(40),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.school,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                          ),
+                          const SikhunMark(size: 46),
                         ],
                       ),
-                      if (auth.isAuthenticated) ...[
-                        const SizedBox(height: 14),
-                        const Divider(color: Colors.white24, height: 1),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      const SizedBox(height: 14),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.account_balance_wallet_outlined, size: 16, color: Colors.white),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'ওয়ালেট ব্যালেন্স: ৳${auth.user!.walletBalance.toStringAsFixed(0)}',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                            InkWell(
-                              onTap: () {
+                            ElevatedButton.icon(
+                              onPressed: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const StudentDashboardScreen()),
+                                  MaterialPageRoute(builder: (_) => const CoursesScreen()),
                                 );
                               },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withAlpha(50),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Text('ড্যাশবোর্ড প্রবেশ', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward, size: 14, color: Colors.white),
-                                  ],
-                                ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: SikhunTheme.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                minimumSize: const Size(0, 32),
                               ),
+                              icon: const Icon(Icons.play_circle_outline, size: 15),
+                              label: const Text('কোর্সসমূহ', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const PlansScreen()),
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white54),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                minimumSize: const Size(0, 32),
+                              ),
+                              icon: const Icon(Icons.workspace_premium_outlined, size: 15),
+                              label: const Text('সাবস্ক্রিপশন প্ল্যান', style: TextStyle(fontSize: 11.5)),
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Official Portals Strip (Admission 2026 Live + Job News)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PortalsScreen(initialTab: 0)),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: SikhunTheme.primary.withAlpha(18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: SikhunTheme.primary.withAlpha(50)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.school, color: SikhunTheme.primary, size: 22),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('ভর্তি বিজ্ঞপ্তি',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text('Admission Live',
+                                        style: TextStyle(fontSize: 10.5, color: SikhunTheme.mutedDark)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PortalsScreen(initialTab: 1)),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: SikhunTheme.success.withAlpha(18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: SikhunTheme.success.withAlpha(50)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.work, color: SikhunTheme.success, size: 22),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('চাকরি নিউজ',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text('BCS & Govt Circulars',
+                                        style: TextStyle(fontSize: 10.5, color: SikhunTheme.mutedDark)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 20),
 
-              // 3 Study Paths (From Web Front Page)
+              // 3 Study Paths
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'পড়াশোনার সহজ ছন্দ',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    const Text('পড়াশোনার সহজ ছন্দ',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    const Text(
-                      'যেখান থেকে শুরু করতে চান',
-                      style: TextStyle(fontSize: 13, color: SikhunTheme.mutedDark),
-                    ),
+                    const Text('যেখান থেকে শুরু করতে চান',
+                        style: TextStyle(fontSize: 13, color: SikhunTheme.mutedDark)),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -360,22 +355,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           desc: 'বই ও অধ্যায় ধরে এআই সাথে স্টাডি',
                           icon: Icons.menu_book,
                           color: const Color(0xFF2563EB),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const LibraryScreen()),
-                            );
-                          },
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const LibraryScreen()),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         _buildStudyPathCard(
                           number: '০২',
-                          title: 'অনুশীলন',
-                          desc: 'প্রশ্নব্যাংক ও মডেল টেস্ট',
+                          title: canSeeQuestionBank ? 'প্রশ্নব্যাংক' : 'মডেল টেস্ট',
+                          desc: canSeeQuestionBank ? 'প্রশ্নব্যাংক ও মডেল টেস্ট' : 'এআই অনুশীলন ও পরীক্ষা',
                           icon: Icons.quiz,
                           color: const Color(0xFF059669),
-                          onTap: () {
-                            // Handled by tab navigation
-                          },
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => canSeeQuestionBank
+                                  ? const QuestionBankScreen()
+                                  : const ExamsScreen(),
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         _buildStudyPathCard(
@@ -384,9 +381,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           desc: 'তাৎক্ষণিক এআই ব্যাখ্যা',
                           icon: Icons.smart_toy,
                           color: const Color(0xFFD97706),
-                          onTap: () {
-                            // Handled by tab navigation
-                          },
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AiChatScreen()),
+                          ),
                         ),
                       ],
                     ),
@@ -402,20 +399,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'আমার বুকশেলফ (পড়া চালিয়ে যান)',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '${lib.bookshelf.length} টি বই',
-                        style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 13),
+                      const Text('আমার বুকশেলফ',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const BookshelfScreen()),
+                        ),
+                        child: Text('সব দেখুন (${lib.bookshelf.length})'),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 SizedBox(
-                  height: 210,
+                  height: 205,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -423,13 +420,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (context, index) {
                       final book = lib.bookshelf[index];
                       return Container(
-                        width: 140,
+                        width: 136,
                         margin: const EdgeInsets.symmetric(horizontal: 6),
                         child: InkWell(
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => BookDetailsScreen(bookId: book.id),
+                                builder: (_) => BookDetailsScreen(bookId: book.id, bookSlug: book.slug),
                               ),
                             );
                           },
@@ -439,52 +436,27 @@ class _HomeScreenState extends State<HomeScreen> {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: Container(
-                                  height: 140,
+                                  height: 136,
                                   color: Colors.grey.shade200,
                                   child: book.coverImage != null && book.coverImage!.isNotEmpty
                                       ? CachedNetworkImage(
                                           imageUrl: book.coverImage!,
                                           fit: BoxFit.cover,
                                           width: double.infinity,
-                                          placeholder: (c, u) => const Center(
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
                                           errorWidget: (c, u, e) => const Icon(Icons.book, size: 40),
                                         )
                                       : const Center(child: Icon(Icons.book, size: 40)),
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                book.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              Text(
-                                book.author ?? 'শিখুন',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 11),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: LinearProgressIndicator(
-                                      value: (book.progress > 0) ? (book.progress / 100.0) : 0.05,
-                                      backgroundColor: Colors.grey.shade300,
-                                      valueColor: const AlwaysStoppedAnimation<Color>(SikhunTheme.primary),
-                                      minHeight: 4,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${book.progress.toInt()}%',
-                                    style: const TextStyle(fontSize: 10, color: SikhunTheme.mutedDark),
-                                  ),
-                                ],
-                              ),
+                              Text(book.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(book.author ?? 'শিখুন',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 11)),
                             ],
                           ),
                         ),
@@ -501,10 +473,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'লাইব্রেরির জনপ্রিয় বই',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    const Text('লাইব্রেরির জনপ্রিয় বই',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).push(
@@ -519,13 +489,12 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
 
               if (lib.isLoading && lib.books.isEmpty)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: CircularProgressIndicator(),
-                ))
+                const Center(
+                  child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()),
+                )
               else
                 SizedBox(
-                  height: 230,
+                  height: 225,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -540,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => BookDetailsScreen(bookId: book.id),
+                                builder: (_) => BookDetailsScreen(bookId: book.id, bookSlug: book.slug),
                               ),
                             );
                           },
@@ -559,9 +528,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                               imageUrl: book.coverImage!,
                                               fit: BoxFit.cover,
                                               width: double.infinity,
-                                              placeholder: (c, u) => const Center(
-                                                child: CircularProgressIndicator(strokeWidth: 2),
-                                              ),
                                               errorWidget: (c, u, e) => const Icon(Icons.book, size: 40),
                                             )
                                           : const Center(child: Icon(Icons.book, size: 40)),
@@ -571,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: book.isFree ? SikhunTheme.accent : SikhunTheme.primary,
+                                            color: book.isFree ? SikhunTheme.success : SikhunTheme.primary,
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
@@ -589,23 +555,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                book.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              Text(
-                                book.author ?? 'শিখুন',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 11),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                book.gradeLevel != null ? 'লেভেল: ${book.gradeLevel}' : 'পূর্ণাঙ্গ বই',
-                                style: const TextStyle(color: SikhunTheme.primary, fontSize: 11),
-                              ),
+                              Text(book.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(book.author ?? 'শিখুন',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 11)),
                             ],
                           ),
                         ),
@@ -614,68 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              const SizedBox(height: 24),
-
-              // 3-Step Rhythm (From Web Front Page)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.withAlpha(40)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'কীভাবে শিখুন আপনাকে এগিয়ে রাখে',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 14),
-                      _buildRhythmStep(
-                        step: '১',
-                        title: 'বিষয়টি বুঝে নিন',
-                        desc: 'বইয়ের যেকোনো প্যারাগ্রাফে ট্যাপ করে তাৎক্ষণিক বাংলা ব্যাখ্যা ও সামারি জানুন।',
-                        icon: Icons.lightbulb_outline,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildRhythmStep(
-                        step: '২',
-                        title: 'নিজে অনুশীলন করুন',
-                        desc: 'অধ্যায়ভিত্তিক প্রশ্নব্যাংক ও নির্ভুল ব্যাখ্যাসহ সেলফ-টেস্ট দিয়ে প্রস্তুতি যাচাই করুন।',
-                        icon: Icons.edit_note,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildRhythmStep(
-                        step: '৩',
-                        title: 'উন্নতি দেখে এগোন',
-                        desc: 'ভুল খাতা ও লিডারবোর্ডের মাধ্যমে নিজের দুর্বল অংশ চিহ্নিত করে এগিয়ে যান।',
-                        icon: Icons.trending_up,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Platform Stats Row (From Web Front Page)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _buildStatPill('১৫,০০০+', 'শিক্ষার্থী', Icons.people_outline),
-                    const SizedBox(width: 8),
-                    _buildStatPill('৫০,০০০+', 'প্রশ্নব্যাংক', Icons.fact_check_outlined),
-                    const SizedBox(width: 8),
-                    _buildStatPill('৫০০+', 'অধ্যায় ও বই', Icons.menu_book_outlined),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Latest Blog Articles
               Padding(
@@ -683,10 +579,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'সাম্প্রতিক ব্লগ ও আর্টিক্যাল',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    const Text('সাম্প্রতিক ব্লগ ও আর্টিক্যাল',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).push(
@@ -745,12 +639,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    item.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
+                                  Text(item.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   const SizedBox(height: 6),
                                   Row(
                                     children: [
@@ -761,16 +653,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                             color: SikhunTheme.primary.withAlpha(20),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: Text(
-                                            item.category!,
-                                            style: const TextStyle(fontSize: 10, color: SikhunTheme.primary),
-                                          ),
+                                          child: Text(item.category!,
+                                              style: const TextStyle(fontSize: 10, color: SikhunTheme.primary)),
                                         ),
                                       const Spacer(),
-                                      Text(
-                                        '${item.readingTime} মিনিট পড়া',
-                                        style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark),
-                                      ),
+                                      Text('${item.readingTime} মিনিট পড়া',
+                                          style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark)),
                                     ],
                                   ),
                                 ],
@@ -815,98 +703,20 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    number,
-                    style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
+                  Text(number,
+                      style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
                   Icon(icon, size: 18, color: color),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 4),
-              Text(
-                desc,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark),
-              ),
+              Text(desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRhythmStep({
-    required String step,
-    required String title,
-    required String desc,
-    required IconData icon,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: SikhunTheme.primary.withAlpha(25),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              step,
-              style: const TextStyle(color: SikhunTheme.primary, fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                desc,
-                style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatPill(String count, String label, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: SikhunTheme.primary.withAlpha(15),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: SikhunTheme.primary),
-            const SizedBox(height: 4),
-            Text(
-              count,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: SikhunTheme.primary),
-            ),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark),
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     );

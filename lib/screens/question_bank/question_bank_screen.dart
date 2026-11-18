@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/question_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/question_bank_provider.dart';
+import '../auth/login_screen.dart';
+import '../exams/exams_screen.dart';
+import '../flashcards/flashcards_screen.dart';
+import '../mistakes/mistake_review_screen.dart';
+import '../plans/plans_screen.dart';
+import '../profile/profile_screen.dart';
 
 class QuestionBankScreen extends StatefulWidget {
   const QuestionBankScreen({super.key});
@@ -13,14 +20,14 @@ class QuestionBankScreen extends StatefulWidget {
 
 class _QuestionBankScreenState extends State<QuestionBankScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final Map<int, int> _userSelectedAnswers = {};
-  final Set<int> _revealedExplanations = {};
+  final Map<int, int> _selectedAnswers = {};
+  final Set<int> _revealedAnswers = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<QuestionBankProvider>(context, listen: false).init();
+      context.read<QuestionBankProvider>().init();
     });
   }
 
@@ -30,407 +37,708 @@ class _QuestionBankScreenState extends State<QuestionBankScreen> {
     super.dispose();
   }
 
-  void _showFilterModal(BuildContext context) {
-    final qb = Provider.of<QuestionBankProvider>(context, listen: false);
+  Future<void> _openCustomMockTestDialog(QuestionBankProvider qb) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      return;
+    }
 
-    showModalBottomSheet(
+    int count = 20;
+    int duration = 20;
+    bool negativeMarking = true;
+
+    await showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (modalCtx, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('কাস্টম মক টেস্ট তৈরি'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'ফিল্টার করুন',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          qb.resetFilters();
-                          Navigator.of(ctx).pop();
-                        },
-                        child: const Text('রিসেট'),
-                      ),
+                  const Text('প্রশ্ন সংখ্যা:'),
+                  DropdownButton<int>(
+                    value: count,
+                    items: const [
+                      DropdownMenuItem(value: 10, child: Text('১০ টি')),
+                      DropdownMenuItem(value: 20, child: Text('২০ টি')),
+                      DropdownMenuItem(value: 30, child: Text('৩০ টি')),
+                      DropdownMenuItem(value: 50, child: Text('৫০ টি')),
                     ],
+                    onChanged: (v) {
+                      if (v != null) setS(() => count = v);
+                    },
                   ),
-                  const SizedBox(height: 12),
-
-                  // Segment
-                  if (qb.segments.isNotEmpty) ...[
-                    const Text('ক্যাটাগরি / সেগমেন্ট', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      children: qb.segments.map((seg) {
-                        final isSel = qb.selectedSegment == seg;
-                        return ChoiceChip(
-                          label: Text(seg),
-                          selected: isSel,
-                          onSelected: (val) {
-                            qb.setFilter(segment: val ? seg : 'all');
-                            setModalState(() {});
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Subject
-                  if (qb.subjects.isNotEmpty) ...[
-                    const Text('বিষয়', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      children: qb.subjects.take(8).map((sub) {
-                        final isSel = qb.selectedSubject == sub;
-                        return ChoiceChip(
-                          label: Text(sub),
-                          selected: isSel,
-                          onSelected: (val) {
-                            qb.setFilter(subject: val ? sub : 'all');
-                            setModalState(() {});
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('প্রয়োগ করুন'),
-                  ),
-                  const SizedBox(height: 10),
                 ],
               ),
-            );
-          },
-        );
-      },
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('সময় (মিনিট):'),
+                  DropdownButton<int>(
+                    value: duration,
+                    items: const [
+                      DropdownMenuItem(value: 10, child: Text('১০ মিনিট')),
+                      DropdownMenuItem(value: 20, child: Text('২০ মিনিট')),
+                      DropdownMenuItem(value: 30, child: Text('৩০ মিনিট')),
+                      DropdownMenuItem(value: 45, child: Text('৪৫ মিনিট')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setS(() => duration = v);
+                    },
+                  ),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('নেগেটিভ মার্কিং (০.২৫)', style: TextStyle(fontSize: 13)),
+                value: negativeMarking,
+                onChanged: (v) => setS(() => negativeMarking = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('বাতিল')),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final res = await qb.generateCustomTest(
+                  subjectId: qb.selectedSubjectId,
+                  originTag: qb.selectedOriginTag,
+                  questionCount: count,
+                  durationMinutes: duration,
+                  negativeMarking: negativeMarking,
+                );
+                if (!mounted) return;
+                if (res.success && res.data is Map && res.data['id'] != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TakeExamScreen(
+                        examId: int.parse(res.data['id'].toString()),
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res.message ?? 'মক টেস্ট তৈরি করা যায়নি'),
+                      backgroundColor: SikhunTheme.danger,
+                    ),
+                  );
+                }
+              },
+              child: const Text('শুরু করুন'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final qb = Provider.of<QuestionBankProvider>(context);
+    final qb = context.watch<QuestionBankProvider>();
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+
+    // Web condition: SSC / HSC / University students cannot view question bank
+    final blockedByRole = user != null && !user.canAccessQuestionBank;
+    if (blockedByRole || qb.isUnavailable) {
+      final goalLabel = user?.typeLabelBn ?? qb.studentGoal ?? 'একাডেমিক';
+      return Scaffold(
+        appBar: AppBar(title: const Text('প্রশ্নব্যাংক')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: SikhunTheme.warning.withAlpha(18),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: SikhunTheme.warning.withAlpha(90)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_clock_outlined, size: 56, color: SikhunTheme.warning),
+                  const SizedBox(height: 16),
+                  Text(
+                    '$goalLabel প্রশ্নব্যাংক এখনো চালু হয়নি',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'বর্তমানে শুধুমাত্র বিশ্ববিদ্যালয় ভর্তি ও বিসিএস/চাকরি প্রস্তুতি প্রশ্নব্যাংক চালু রয়েছে। SSC, HSC এবং বিশ্ববিদ্যালয় একাডেমিক শিক্ষার্থীদের জন্য প্রশ্নব্যাংক শীঘ্রই যুক্ত করা হবে।',
+                    style: TextStyle(fontSize: 13, height: 1.55),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                          child: const Text('ড্যাশবোর্ড'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                            );
+                          },
+                          child: const Text('লক্ষ্য পরিবর্তন'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('স্মার্ট প্রশ্নব্যাংক'),
+        title: Text(
+          qb.activeSector == 'job' ? 'বিসিএস ও চাকরি প্রশ্নব্যাংক' : 'ভর্তি পরীক্ষা প্রশ্নব্যাংক',
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.filter_list),
-            tooltip: 'ফিল্টার',
-            onPressed: () => _showFilterModal(context),
+            icon: const Icon(Icons.menu_book_outlined),
+            tooltip: 'ভুল প্রশ্নের খাতা',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MistakeReviewScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => qb.fetchQuestions(page: qb.currentPage),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Search Bar
+          // Goal lock notice or guest sector switch
+          if (qb.lockedToGoal && user != null)
+            Container(
+              width: double.infinity,
+              color: SikhunTheme.primary.withAlpha(18),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_user_outlined, size: 16, color: SikhunTheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'আপনার লক্ষ্য (${user.typeLabelBn}) অনুসারে প্রশ্ন প্রদর্শিত হচ্ছে',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: SikhunTheme.primary),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 28),
+                    ),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    ),
+                    child: const Text('পরিবর্তন', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Row(
+                children: [
+                  _sectorTab(qb, 'admission', 'ভর্তি পরীক্ষা (${qb.sectorCounts['admission'] ?? 0})'),
+                  const SizedBox(width: 8),
+                  _sectorTab(qb, 'job', 'বিসিএস ও চাকরি (${qb.sectorCounts['job'] ?? 0})'),
+                ],
+              ),
+            ),
+
+          // Action Hero Strip (Mock Test + Flashcards + Mistakes)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [SikhunTheme.primary, SikhunTheme.accent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  qb.activeSector == 'job'
+                      ? 'বিসিএস ও সরকারি চাকরি প্রস্তুতি (${qb.totalQuestions} প্রশ্ন)'
+                      : 'বিশ্ববিদ্যালয় ও মেডিকেল ভর্তি প্রস্তুতি (${qb.totalQuestions} প্রশ্ন)',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: qb.isGeneratingTest ? null : () => _openCustomMockTestDialog(qb),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: SikhunTheme.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          minimumSize: const Size(0, 34),
+                        ),
+                        icon: const Icon(Icons.bolt, size: 16),
+                        label: const Text('কাস্টম মক টেস্ট', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const CreateFlashcardSetScreen()),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white54),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: const Size(0, 34),
+                        ),
+                        icon: const Icon(Icons.style_outlined, size: 15),
+                        label: const Text('ফ্ল্যাশকার্ড', style: TextStyle(fontSize: 12)),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const MistakeReviewScreen()),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white54),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: const Size(0, 34),
+                        ),
+                        icon: const Icon(Icons.bookmark_remove_outlined, size: 15),
+                        label: const Text('ভুলের খাতা', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Search + Subject / Exam Filters
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'প্রশ্ন, পরীক্ষা বা টপিক খুঁজুন...',
-                prefixIcon: const Icon(Icons.search),
+                hintText: 'প্রশ্ন বা অধ্যায় খুঁজুন...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
                           _searchController.clear();
                           qb.setFilter(search: '');
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               ),
-              onSubmitted: (val) {
-                qb.setFilter(search: val.trim());
-              },
+              onSubmitted: (val) => qb.setFilter(search: val),
             ),
           ),
 
-          // Active filter badges
-          if (qb.selectedSegment != null || qb.selectedSubject != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    if (qb.selectedSegment != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Chip(
-                          label: Text('ক্যাটাগরি: ${qb.selectedSegment}'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () => qb.setFilter(segment: 'all'),
-                        ),
+          if (qb.subjects.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: qb.subjects.length + 1,
+                itemBuilder: (ctx, i) {
+                  if (i == 0) {
+                    final sel = qb.selectedSubjectId == null;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: FilterChip(
+                        label: const Text('সকল বিষয়', style: TextStyle(fontSize: 11)),
+                        selected: sel,
+                        onSelected: (_) => qb.setFilter(clearSubject: true),
                       ),
-                    if (qb.selectedSubject != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Chip(
-                          label: Text('বিষয়: ${qb.selectedSubject}'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () => qb.setFilter(subject: 'all'),
-                        ),
-                      ),
-                  ],
-                ),
+                    );
+                  }
+                  final subj = qb.subjects[i - 1];
+                  final sel = qb.selectedSubjectId == subj.id;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: FilterChip(
+                      label: Text('${subj.nameBn} (${subj.questionsCount})',
+                          style: const TextStyle(fontSize: 11)),
+                      selected: sel,
+                      onSelected: (_) => qb.setFilter(subjectId: subj.id),
+                    ),
+                  );
+                },
               ),
             ),
+          ],
 
-          // Question count indicator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'মোট প্রশ্ন: ${qb.questions.length} টি',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: SikhunTheme.mutedDark),
-                ),
-              ],
+          if (qb.exams.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 34,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: qb.exams.length + 1,
+                itemBuilder: (ctx, i) {
+                  if (i == 0) {
+                    final sel = qb.selectedOriginTag == null;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: const Text('সকল পরীক্ষা', style: TextStyle(fontSize: 11)),
+                        selected: sel,
+                        onSelected: (_) => qb.setFilter(clearOrigin: true),
+                      ),
+                    );
+                  }
+                  final ex = qb.exams[i - 1];
+                  final sel = qb.selectedOriginTag == ex.originTag;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      label: Text('${ex.examName} (${ex.count})', style: const TextStyle(fontSize: 11)),
+                      selected: sel,
+                      onSelected: (_) => qb.setFilter(originTag: ex.originTag),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
+          ],
 
-          // Question List
+          const SizedBox(height: 8),
+
+          // Questions List
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => qb.fetchQuestions(),
-              child: qb.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : qb.questions.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'কোনো প্রশ্ন পাওয়া যায়নি',
-                            style: TextStyle(color: SikhunTheme.mutedDark),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: qb.questions.length,
-                          itemBuilder: (context, index) {
-                            final q = qb.questions[index];
-                            return _buildQuestionCard(q, index);
-                          },
+            child: qb.isLoading && qb.questions.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : qb.errorMessage != null && qb.questions.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(qb.errorMessage!),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: () => qb.fetchQuestions(),
+                              child: const Text('আবার চেষ্টা করুন'),
+                            ),
+                          ],
                         ),
-            ),
+                      )
+                    : qb.questions.isEmpty
+                        ? const Center(child: Text('এই ফিল্টারে কোনো প্রশ্ন পাওয়া যায়নি'))
+                        : RefreshIndicator(
+                            onRefresh: () => qb.fetchQuestions(page: qb.currentPage),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              itemCount: qb.questions.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == qb.questions.length) {
+                                  return Column(
+                                    children: [
+                                      if (!qb.isPaid)
+                                        Container(
+                                          margin: const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.all(14),
+                                          decoration: BoxDecoration(
+                                            color: SikhunTheme.warning.withAlpha(20),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: SikhunTheme.warning.withAlpha(80)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.workspace_premium, color: SikhunTheme.warning),
+                                              const SizedBox(width: 10),
+                                              const Expanded(
+                                                child: Text(
+                                                  'সম্পূর্ণ প্রশ্নব্যাংক ও আনলিমিটেড এআই ব্যাখ্যা আনলক করতে সাবস্ক্রিপশন নিন।',
+                                                  style: TextStyle(fontSize: 12),
+                                                ),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.of(context).push(
+                                                  MaterialPageRoute(builder: (_) => const PlansScreen()),
+                                                ),
+                                                child: const Text('প্ল্যান দেখুন', style: TextStyle(fontSize: 11)),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      if (qb.lastPage > 1)
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            TextButton.icon(
+                                              onPressed: qb.currentPage > 1
+                                                  ? () => qb.fetchQuestions(page: qb.currentPage - 1)
+                                                  : null,
+                                              icon: const Icon(Icons.chevron_left),
+                                              label: const Text('পূর্ববর্তী'),
+                                            ),
+                                            Text('পৃষ্ঠা ${qb.currentPage} / ${qb.lastPage}'),
+                                            TextButton.icon(
+                                              onPressed: qb.currentPage < qb.lastPage
+                                                  ? () => qb.fetchQuestions(page: qb.currentPage + 1)
+                                                  : null,
+                                              icon: const Icon(Icons.chevron_right),
+                                              label: const Text('পরবর্তী'),
+                                            ),
+                                          ],
+                                        ),
+                                      const SizedBox(height: 40),
+                                    ],
+                                  );
+                                }
+
+                                return _buildQuestionCard(qb.questions[index], index + 1, qb);
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuestionCard(QuestionModel q, int index) {
-    final selectedOption = _userSelectedAnswers[q.id];
-    final showExplanation = _revealedExplanations.contains(q.id);
+  Widget _sectorTab(QuestionBankProvider qb, String sector, String label) {
+    final selected = qb.activeSector == sector;
+    return Expanded(
+      child: InkWell(
+        onTap: () => qb.setFilter(sector: sector, clearSubject: true, clearOrigin: true),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? SikhunTheme.primary : Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? SikhunTheme.primary : Colors.grey.withAlpha(50),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: selected ? Colors.white : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuestionCard(QuestionModel q, int number, QuestionBankProvider qb) {
+    final selectedIdx = _selectedAnswers[q.id];
+    final isRevealed = _revealedAnswers.contains(q.id);
+    final aiExp = qb.explanationFor(q.id);
+    final isExplaining = qb.isExplaining(q.id);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 1.5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header tags: Exam name, Subject, Year
             Wrap(
               spacing: 6,
               runSpacing: 4,
               children: [
+                _tag('#$number', SikhunTheme.primary),
                 if (q.examName != null && q.examName!.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: SikhunTheme.primary.withAlpha(20),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      q.examName!,
-                      style: const TextStyle(fontSize: 11, color: SikhunTheme.primary, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  _tag('${q.examName}${q.year != null ? ' ${q.year}' : ''}', SikhunTheme.accent),
                 if (q.subject != null && q.subject!.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      q.subject!,
-                      style: const TextStyle(fontSize: 11, color: SikhunTheme.textDark),
-                    ),
-                  ),
-                if (q.year != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '${q.year}',
-                      style: const TextStyle(fontSize: 11, color: SikhunTheme.textDark),
-                    ),
-                  ),
+                  _tag(q.subject!, SikhunTheme.success),
               ],
             ),
             const SizedBox(height: 10),
-
-            // Question Text
             Text(
-              '${index + 1}. ${q.questionText}',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                height: 1.4,
-              ),
+              q.questionText,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.45),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            ...List.generate(q.options.length, (i) {
+              final isSelected = selectedIdx == i;
+              final isCorrect = q.correctOptionIndex == i;
 
-            // Options
-            ...List.generate(q.options.length, (optIdx) {
-              final optionText = q.options[optIdx];
-              final isChosen = selectedOption == optIdx;
-              final isCorrect = q.correctOptionIndex == optIdx;
-
-              Color borderColor = Colors.grey.shade300;
-              Color bgColor = Colors.transparent;
-              IconData? statusIcon;
-
-              if (selectedOption != null) {
+              Color borderColor = Colors.grey.withAlpha(60);
+              Color fillColor = Colors.transparent;
+              if (isSelected || isRevealed) {
                 if (isCorrect) {
-                  borderColor = SikhunTheme.accent;
-                  bgColor = SikhunTheme.accent.withAlpha(25);
-                  statusIcon = Icons.check_circle;
-                } else if (isChosen) {
+                  borderColor = SikhunTheme.success;
+                  fillColor = SikhunTheme.success.withAlpha(20);
+                } else if (isSelected && q.correctOptionIndex != null && !isCorrect) {
                   borderColor = SikhunTheme.danger;
-                  bgColor = SikhunTheme.danger.withAlpha(25);
-                  statusIcon = Icons.cancel;
+                  fillColor = SikhunTheme.danger.withAlpha(20);
                 }
               }
 
-              final letters = ['ক', 'খ', 'গ', 'ঘ'];
-              final prefix = optIdx < letters.length ? letters[optIdx] : '${optIdx + 1}';
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: borderColor, width: isChosen || (selectedOption != null && isCorrect) ? 1.5 : 1),
-                ),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
                   onTap: () {
                     setState(() {
-                      _userSelectedAnswers[q.id] = optIdx;
+                      _selectedAnswers[q.id] = i;
+                      _revealedAnswers.add(q.id);
                     });
                   },
-                  child: Padding(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1),
+                    ),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundColor: isChosen
-                              ? (isCorrect ? SikhunTheme.accent : SikhunTheme.danger)
-                              : Colors.grey.shade200,
-                          child: Text(
-                            prefix,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: isChosen ? Colors.white : SikhunTheme.textDark,
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected
+                                ? (isCorrect ? SikhunTheme.success : SikhunTheme.danger)
+                                : Colors.grey.withAlpha(40),
+                          ),
+                          child: Center(
+                            child: Text(
+                              String.fromCharCode(65 + i),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : null,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            optionText,
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                          child: Text(q.options[i], style: const TextStyle(fontSize: 14)),
                         ),
-                        if (statusIcon != null)
-                          Icon(
-                            statusIcon,
-                            size: 18,
-                            color: isCorrect ? SikhunTheme.accent : SikhunTheme.danger,
-                          ),
+                        if ((isSelected || isRevealed) && isCorrect)
+                          const Icon(Icons.check_circle, color: SikhunTheme.success, size: 18)
+                        else if (isSelected && q.correctOptionIndex != null && !isCorrect)
+                          const Icon(Icons.cancel, color: SikhunTheme.danger, size: 18),
                       ],
                     ),
                   ),
                 ),
               );
             }),
-
-            // Explanation Section
-            if (selectedOption != null && q.explanation != null && q.explanation!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              if (!showExplanation)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 TextButton.icon(
-                  icon: const Icon(Icons.help_outline, size: 16),
-                  label: const Text('ব্যাখ্যা দেখুন', style: TextStyle(fontSize: 12)),
                   onPressed: () {
                     setState(() {
-                      _revealedExplanations.add(q.id);
+                      if (isRevealed) {
+                        _revealedAnswers.remove(q.id);
+                      } else {
+                        _revealedAnswers.add(q.id);
+                      }
                     });
                   },
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.lightbulb_outline, size: 16, color: Colors.orange),
-                          SizedBox(width: 4),
-                          Text(
-                            'সঠিক উত্তরের ব্যাখ্যা:',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.brown),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        q.explanation!,
-                        style: const TextStyle(fontSize: 12, height: 1.4, color: Colors.black87),
-                      ),
-                    ],
-                  ),
+                  icon: Icon(isRevealed ? Icons.visibility_off : Icons.visibility, size: 16),
+                  label: Text(isRevealed ? 'উত্তর লুকান' : 'সঠিক উত্তর দেখুন',
+                      style: const TextStyle(fontSize: 12)),
                 ),
-            ],
+                TextButton.icon(
+                  onPressed: isExplaining ? null : () => qb.explainQuestion(q.id),
+                  icon: isExplaining
+                      ? const SizedBox(
+                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text('এআই ব্যাখ্যা', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            if (isRevealed && q.explanation != null && q.explanation!.isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: SikhunTheme.success.withAlpha(15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('ব্যাখ্যা: ${q.explanation}', style: const TextStyle(fontSize: 12, height: 1.5)),
+              ),
+            if (aiExp != null && aiExp.isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: SikhunTheme.primary.withAlpha(15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('এআই টিউটরের ব্যাখ্যা:',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: SikhunTheme.primary)),
+                    const SizedBox(height: 4),
+                    Text(aiExp, style: const TextStyle(fontSize: 12, height: 1.5)),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _tag(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(22),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 }

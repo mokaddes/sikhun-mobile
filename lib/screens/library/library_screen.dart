@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../models/book_model.dart';
 import '../../providers/library_provider.dart';
+import '../bookshelf/bookshelf_screen.dart';
 import 'book_details_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -19,10 +20,11 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
 
   final List<Map<String, String>> _categories = [
     {'label': 'সকল বই', 'value': 'all'},
-    {'label': 'HSC', 'value': 'HSC'},
-    {'label': 'SSC', 'value': 'SSC'},
     {'label': 'ভর্তি পরীক্ষা', 'value': 'ADMISSION'},
     {'label': 'চাকরি প্রস্তুতি', 'value': 'JOB'},
+    {'label': 'HSC', 'value': 'HSC'},
+    {'label': 'SSC', 'value': 'SSC'},
+    {'label': 'বিশ্ববিদ্যালয়', 'value': 'UNIVERSITY'},
   ];
 
   @override
@@ -45,6 +47,15 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
     return Scaffold(
       appBar: AppBar(
         title: const Text('শিখুন লাইব্রেরি'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmarks_outlined),
+            tooltip: 'আমার বুকশেলফ ও নিজস্ব বই',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BookshelfScreen()),
+            ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: SikhunTheme.primary,
@@ -209,7 +220,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => BookDetailsScreen(bookId: book.id),
+              builder: (_) => BookDetailsScreen(bookId: book.id, bookSlug: book.slug),
             ),
           );
         },

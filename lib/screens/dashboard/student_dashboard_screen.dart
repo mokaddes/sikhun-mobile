@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
+import '../../models/dashboard_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/locale_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../services/offline_service.dart';
-import '../library/book_details_screen.dart';
+import '../../providers/theme_provider.dart';
+import '../../widgets/sikhun_brand_logo.dart';
+import '../ai_chat/ai_chat_screen.dart';
+import '../blog/blog_list_screen.dart';
+import '../bookshelf/bookshelf_screen.dart';
+import '../community/community_screen.dart';
+import '../courses/courses_screen.dart';
+import '../exams/exams_screen.dart';
+import '../flashcards/flashcards_screen.dart';
+import '../library/library_screen.dart';
+import '../mistakes/mistake_review_screen.dart';
 import '../notifications/notification_screen.dart';
+import '../plans/plans_screen.dart';
+import '../portals/portals_screen.dart';
+import '../profile/profile_screen.dart';
+import '../question_bank/question_bank_screen.dart';
+import '../reader/book_reader_screen.dart';
+import '../tools/ai_tools_screen.dart';
+import '../wallet/wallet_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -26,172 +40,170 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<DashboardProvider>(context, listen: false).fetchDashboard();
+      _refreshAll();
     });
   }
 
-  Future<void> _openWeb(String path) async {
-    final uri = Uri.parse('https://sikhun.com$path');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
-    }
+  Future<void> _refreshAll() async {
+    await context.read<AuthProvider>().fetchProfile();
+    if (!mounted) return;
+    await context.read<DashboardProvider>().fetchDashboard();
+    if (!mounted) return;
+    await context.read<NotificationProvider>().fetchNotifications(silent: true);
+  }
+
+  void _push(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-    final dashProv = Provider.of<DashboardProvider>(context);
-    final localeProv = Provider.of<LocaleProvider>(context);
-    final themeProv = Provider.of<ThemeProvider>(context);
-    final notifProv = Provider.of<NotificationProvider>(context);
-
+    final auth = context.watch<AuthProvider>();
+    final dash = context.watch<DashboardProvider>();
+    final notif = context.watch<NotificationProvider>();
+    final locale = context.watch<LocaleProvider>();
+    final themeProv = context.watch<ThemeProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = auth.user;
-    final data = dashProv.dashboardData;
-    final isDark = themeProv.isDarkMode;
+    final data = dash.dashboardData;
+    final isEn = !locale.isBengali;
 
-    // Current Date Formatter
-    final now = DateTime.now();
-    final List<String> weekdaysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    final List<String> weekdaysBn = ['সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার', 'রবিবার'];
-    final List<String> monthsEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    final List<String> monthsBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+    final primary = isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary;
+    final bgColor = isDark ? SikhunTheme.darkBg : SikhunTheme.lightBg;
+    final surface = isDark ? SikhunTheme.darkSurface : SikhunTheme.lightSurface;
+    final surface2 = isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2;
+    final textColor = isDark ? SikhunTheme.darkText : SikhunTheme.textDark;
+    final muted = isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark;
+    final border = isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder;
 
-    final weekday = localeProv.isBengali ? weekdaysBn[now.weekday - 1] : weekdaysEn[now.weekday - 1];
-    final month = localeProv.isBengali ? monthsBn[now.month - 1] : monthsEn[now.month - 1];
-    final dateString = '📅 $weekday ${now.day} $month';
+    final firstName = (user?.name ?? 'Student').trim().split(' ').first;
+    final avatarChar = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'S';
 
-    final studentName = user?.name.split(' ').first ?? (localeProv.isBengali ? 'শিক্ষার্থী' : 'Student');
-    final walletBal = user?.walletBalance ?? data?.walletBalance ?? 0.0;
-    final continueReading = data?.continueReading;
+    // Web condition: SSC / HSC / University students cannot see Question Bank
+    final canSeeQuestionBank = data?.canAccessQuestionBank ?? (user?.canAccessQuestionBank ?? false);
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: _buildStudentDrawer(context, auth, localeProv, themeProv),
+      backgroundColor: bgColor,
+      drawer: _buildNavigationDrawer(
+        isDark: isDark,
+        surface: surface,
+        primary: primary,
+        textColor: textColor,
+        muted: muted,
+        border: border,
+        locale: locale,
+        auth: auth,
+        canSeeQuestionBank: canSeeQuestionBank,
+      ),
       appBar: AppBar(
+        backgroundColor: surface,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu, size: 24),
-          tooltip: 'Menu',
-          onPressed: () {
-            _scaffoldKey.currentState?.openDrawer();
-          },
+          icon: Icon(Icons.menu, color: textColor),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         titleSpacing: 0,
-        title: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                localeProv.isBengali ? 'ওয়ালেট: ' : 'Wallet Balance: ',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                ),
-              ),
-              Text(
-                '৳${walletBal.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
-                ),
-              ),
-            ],
-          ),
+        title: SikhunBrandLogo(
+          compact: true,
+          markSize: 30,
+          showTagline: false,
+          isBangla: !isEn,
         ),
         actions: [
-          // 1. Language Toggle Button (বাং / EN)
+          // Wallet Balance Pill
           InkWell(
-            onTap: () => localeProv.toggleLocale(),
-            borderRadius: BorderRadius.circular(16),
+            onTap: () => _push(const WalletScreen()),
+            borderRadius: BorderRadius.circular(18),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              margin: const EdgeInsets.only(right: 6),
+              margin: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-                ),
+                color: surface2,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: border),
               ),
-              child: Text(
-                localeProv.isBengali ? 'বাং' : 'EN',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
+              child: Center(
+                child: Text(
+                  '৳${(data?.walletBalance ?? user?.walletBalance ?? 0).toStringAsFixed(0)}',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary),
                 ),
               ),
             ),
           ),
 
-          // 2. Theme Toggle Button (☀️ / 🌙)
+          // Language Toggle Pill (BN/EN)
+          InkWell(
+            onTap: () => locale.toggleLocale(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  isEn ? 'বাং' : 'EN',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+                ),
+              ),
+            ),
+          ),
+
+          // Theme Toggle Icon
           IconButton(
             icon: Icon(
-              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              themeProv.isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
               size: 20,
+              color: textColor,
             ),
-            tooltip: isDark ? 'Light Mode' : 'Dark Mode',
             onPressed: () => themeProv.toggleTheme(),
           ),
 
-          // 3. Notification Bell with Unread Badge
+          // Notifications Bell
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications_outlined, size: 22),
-                tooltip: 'Notifications',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NotificationScreen()),
-                  );
-                },
+                icon: Icon(Icons.notifications_none, size: 22, color: textColor),
+                onPressed: () => _push(const NotificationScreen()),
               ),
-              if (notifProv.unreadCount > 0)
+              if (notif.unreadCount > 0)
                 Positioned(
-                  top: 8,
+                  top: 10,
                   right: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF8A5A32),
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: SikhunTheme.danger,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
-                      '${notifProv.unreadCount > 99 ? '99+' : notifProv.unreadCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
+                      '${notif.unreadCount > 99 ? '99+' : notif.unreadCount}',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
             ],
           ),
 
-          // 4. Student Avatar Circle with Initial
+          // User Avatar Badge
           Padding(
-            padding: const EdgeInsets.only(right: 12, left: 4),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF8A5A32),
-              child: Text(
-                user != null && user.name.isNotEmpty ? user.name[0].toUpperCase() : 'র',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+            padding: const EdgeInsets.only(right: 10, left: 2),
+            child: InkWell(
+              onTap: () => _push(const ProfileScreen()),
+              child: CircleAvatar(
+                radius: 15,
+                backgroundColor: primary,
+                child: Text(
+                  avatarChar,
+                  style: TextStyle(
+                    color: isDark ? const Color(0xFF111827) : Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -199,473 +211,408 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          if (auth.isAuthenticated) await auth.fetchProfile();
-          await dashProv.fetchDashboard();
-          await notifProv.fetchNotifications(silent: true);
-        },
+        onRefresh: _refreshAll,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==========================================
-              // STUDENT OVERVIEW CARD (MATCHING IMAGE 3)
-              // ==========================================
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [
-                            SikhunTheme.darkSurface,
-                            SikhunTheme.darkSurface2,
-                          ]
-                        : [
-                            const Color(0xFFF9F6F0),
-                            const Color(0xFFF2ECE1),
-                          ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: isDark ? SikhunTheme.darkBorder : const Color(0xFFE5DED2),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(isDark ? 30 : 10),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+              // 1. STUDENT OVERVIEW Header + Quick Plan Pill
+              Text(
+                locale.t('dashboard.overview'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                  color: primary,
                 ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Eyebrow
-                    Text(
-                      localeProv.t('dashboard.overview'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                        color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Title
-                    Text(
-                      '${localeProv.t('dashboard.welcome')}, $studentName 👋',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Playfair Display',
-                        color: isDark ? SikhunTheme.darkText : SikhunTheme.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Subtitle
-                    Text(
-                      localeProv.t('dashboard.subtitle'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Date Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: isDark ? SikhunTheme.darkSurface2 : Colors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-                        ),
-                      ),
-                      child: Text(
-                        dateString,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 4 Stat Cards in 2x2 Grid (IMAGE 3)
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1.6,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildStatTile(
-                          context,
-                          label: localeProv.t('dashboard.wallet_balance'),
-                          value: '৳${walletBal.toStringAsFixed(0)}',
-                          icon: Icons.account_balance_wallet_outlined,
-                          isDark: isDark,
+                        Text(
+                          isEn
+                              ? '${locale.t('dashboard.welcome')}, $firstName'
+                              : '${locale.t('dashboard.welcome')}, ${user?.name ?? 'শিক্ষার্থী'}',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor),
                         ),
-                        _buildStatTile(
-                          context,
-                          label: localeProv.t('dashboard.books_owned'),
-                          value: '${data?.booksOwned ?? 0}',
-                          icon: Icons.menu_book_outlined,
-                          isDark: isDark,
-                        ),
-                        _buildStatTile(
-                          context,
-                          label: localeProv.t('dashboard.exams_taken'),
-                          value: '${data?.examsTaken ?? 0}',
-                          icon: Icons.fact_check_outlined,
-                          isDark: isDark,
-                        ),
-                        _buildStatTile(
-                          context,
-                          label: localeProv.t('dashboard.courses_enrolled'),
-                          value: '${data?.coursesEnrolled ?? 0}',
-                          icon: Icons.school_outlined,
-                          isDark: isDark,
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: primary.withAlpha(24),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                isEn ? (user?.typeLabelEn ?? 'Student') : (user?.typeLabelBn ?? 'শিক্ষার্থী'),
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primary),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                locale.t('dashboard.subtitle'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12.5, color: muted),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-                    // CURRENT PLAN SECTION (MATCHING IMAGE 3)
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark ? SikhunTheme.darkSurface2 : Colors.white.withAlpha(220),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-                        ),
-                      ),
+              // 2. Real Pending Order Payment Alert Banner (No Hardcoded Order IDs!)
+              if (data?.pendingOrder != null) ...[
+                _buildPendingPaymentAlert(data!.pendingOrder!, primary, surface, textColor, muted, locale),
+                const SizedBox(height: 16),
+              ],
+
+              // 3. Stats 2x2 Grid
+              Row(
+                children: [
+                  _buildStatCard(
+                    title: locale.t('dashboard.wallet_balance'),
+                    value: '৳${(data?.walletBalance ?? user?.walletBalance ?? 0).toStringAsFixed(0)}',
+                    icon: Icons.account_balance_wallet_outlined,
+                    iconColor: primary,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    muted: muted,
+                    onTap: () => _push(const WalletScreen()),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    title: locale.t('dashboard.books_owned'),
+                    value: '${data?.booksOwned ?? 0}',
+                    icon: Icons.menu_book_outlined,
+                    iconColor: Colors.blueAccent,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    muted: muted,
+                    onTap: () => _push(const BookshelfScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _buildStatCard(
+                    title: locale.t('dashboard.exams_taken'),
+                    value: '${data?.examsTaken ?? 0}',
+                    icon: Icons.assignment_turned_in_outlined,
+                    iconColor: SikhunTheme.success,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    muted: muted,
+                    onTap: () => _push(const ExamsScreen()),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    title: locale.t('dashboard.courses_enrolled'),
+                    value: '${data?.coursesEnrolled ?? 0}',
+                    icon: Icons.play_circle_outline,
+                    iconColor: Colors.purpleAccent,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    muted: muted,
+                    onTap: () => _push(const CoursesScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Current Subscription Plan Card (Real Plan & Expiry)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            localeProv.t('dashboard.current_plan'),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.0,
-                              color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                            ),
+                            locale.t('dashboard.current_plan'),
+                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: muted),
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF16A34A),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                data?.activeSubscriptionPlan ?? 'স্টার্টার লার্নার',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? SikhunTheme.darkText : SikhunTheme.textDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
                           Text(
-                            '${localeProv.t('dashboard.active_until')} 11/30/2026',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                            ),
+                            data?.activeSubscriptionPlan ?? (isEn ? 'Free Trial' : 'ফ্রি ট্রায়াল'),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
                           ),
-                          const SizedBox(height: 8),
-                          InkWell(
-                            onTap: () => _openWeb('/plans'),
-                            child: Text(
-                              localeProv.t('dashboard.manage_plan'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
-                              ),
+                          if (data?.activeSubscriptionExpiresAt != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${locale.t('dashboard.active_until')} ${data!.activeSubscriptionExpiresAt}',
+                              style: TextStyle(fontSize: 12, color: muted),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ==========================================
-              // PENDING ORDER BANNER (MATCHING IMAGE 3)
-              // ==========================================
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF261E14) : const Color(0xFFFFF9ED),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFFD97706).withAlpha(80),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD97706).withAlpha(30),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text('⏳', style: TextStyle(fontSize: 18)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    localeProv.t('dashboard.payment_pending'),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: isDark ? SikhunTheme.darkText : SikhunTheme.textDark,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFD97706).withAlpha(40),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      '#SKH-261114-KG7UHQ',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFFB45309),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      localeProv.t('dashboard.payment_pending_desc'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                        height: 1.4,
+                    ElevatedButton(
+                      onPressed: () => _push(const PlansScreen()),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: surface2,
+                        foregroundColor: primary,
+                        elevation: 0,
+                        side: BorderSide(color: border),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      child: Text(
+                        locale.t('dashboard.manage_plan'),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => _openWeb('/wallet'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8A5A32),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            minimumSize: const Size(0, 36),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            localeProv.t('dashboard.verify_trx'),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: () => _openWeb('/support/tickets'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark ? SikhunTheme.darkText : SikhunTheme.textDark,
-                            side: BorderSide(color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            minimumSize: const Size(0, 36),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: Text(
-                            localeProv.t('dashboard.contact_support'),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const Spacer(),
-                        InkWell(
-                          onTap: () => _openWeb('/wallet'),
-                          child: Text(
-                            localeProv.t('dashboard.wallet_link'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 20),
 
-              // ==========================================
-              // CONTINUE READING SECTION
-              // ==========================================
-              if (continueReading != null) ...[
+              // 5. Continue Reading Card
+              if (data?.continueReading != null) ...[
                 Text(
-                  localeProv.t('dashboard.continue_reading'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  locale.t('dashboard.continue_reading'),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
                 ),
-                const SizedBox(height: 8),
-                Card(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => BookDetailsScreen(bookId: continueReading.bookId),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () {
+                    final cr = data.continueReading!;
+                    _push(BookReaderScreen(
+                      bookId: cr.bookId,
+                      title: cr.bookTitle,
+                      initialPage: cr.currentPage,
+                    ));
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                data!.continueReading!.bookTitle,
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                              ),
+                            ),
+                            Text(
+                              '${data.continueReading!.progress}%',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: primary),
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              width: 60,
-                              height: 80,
-                              color: isDark ? SikhunTheme.darkSurface2 : SikhunTheme.lightSurface2,
-                              child: continueReading.coverImage != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: continueReading.coverImage!,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (c, u, e) => const Icon(Icons.book),
-                                    )
-                                  : const Icon(Icons.book),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  continueReading.bookTitle,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  continueReading.chapterTitle,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: LinearProgressIndicator(
-                                        value: (continueReading.progressPercent / 100.0).clamp(0.05, 1.0),
-                                        backgroundColor: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
-                                        ),
-                                        minHeight: 5,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${continueReading.progressPercent.toInt()}%',
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            size: 14,
-                            color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                          ),
-                        ],
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          data.continueReading!.chapterTitle,
+                          style: TextStyle(fontSize: 12, color: muted),
+                        ),
+                        const SizedBox(height: 10),
+                        LinearProgressIndicator(
+                          value: (data.continueReading!.progressPercent / 100).clamp(0.0, 1.0),
+                          backgroundColor: surface2,
+                          valueColor: AlwaysStoppedAnimation<Color>(primary),
+                          minHeight: 7,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
               ],
 
-              // ==========================================
-              // STUDY DESK TOOLS
-              // ==========================================
+              // 6. Smart Study Desk Grid (100% Native Screens, Goal-aware)
               Text(
-                localeProv.t('dashboard.smart_desk'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                locale.t('dashboard.smart_desk'),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
               ),
               const SizedBox(height: 10),
-              Row(
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.96,
                 children: [
-                  _buildDeskToolPill(
-                    label: localeProv.t('nav.mistakes'),
-                    icon: Icons.history_edu_outlined,
-                    isDark: isDark,
-                    onTap: () => _openWeb('/mistakes'),
+                  _buildDeskAction(
+                    icon: Icons.smart_toy_outlined,
+                    label: locale.t('nav.ai_chat'),
+                    color: Colors.amber.shade700,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const AiChatScreen()),
                   ),
-                  const SizedBox(width: 8),
-                  _buildDeskToolPill(
-                    label: localeProv.t('nav.flashcards'),
+                  _buildDeskAction(
+                    icon: Icons.quiz_outlined,
+                    label: locale.t('nav.exams'),
+                    color: Colors.deepOrange,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const ExamsScreen()),
+                  ),
+                  if (canSeeQuestionBank)
+                    _buildDeskAction(
+                      icon: Icons.assignment_turned_in_outlined,
+                      label: locale.t('nav.question_bank'),
+                      color: SikhunTheme.success,
+                      surface: surface,
+                      border: border,
+                      textColor: textColor,
+                      onTap: () => _push(const QuestionBankScreen()),
+                    ),
+                  _buildDeskAction(
+                    icon: Icons.bookmark_remove_outlined,
+                    label: locale.t('nav.mistakes'),
+                    color: SikhunTheme.danger,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const MistakeReviewScreen()),
+                  ),
+                  _buildDeskAction(
                     icon: Icons.style_outlined,
-                    isDark: isDark,
-                    onTap: () => _openWeb('/flashcards'),
+                    label: locale.t('nav.flashcards'),
+                    color: Colors.teal,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const FlashcardsScreen()),
                   ),
-                  const SizedBox(width: 8),
-                  _buildDeskToolPill(
-                    label: localeProv.t('nav.schedules'),
+                  _buildDeskAction(
+                    icon: Icons.menu_book_outlined,
+                    label: locale.t('nav.bookshelf'),
+                    color: Colors.blueAccent,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const BookshelfScreen()),
+                  ),
+                  _buildDeskAction(
+                    icon: Icons.play_circle_outline,
+                    label: locale.t('nav.courses'),
+                    color: Colors.indigo,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const CoursesScreen()),
+                  ),
+                  _buildDeskAction(
+                    icon: Icons.rate_review_outlined,
+                    label: locale.t('nav.essays'),
+                    color: Colors.purple,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const AiToolsScreen(initialTab: 0)),
+                  ),
+                  _buildDeskAction(
                     icon: Icons.calendar_month_outlined,
-                    isDark: isDark,
-                    onTap: () => _openWeb('/schedules'),
+                    label: locale.t('nav.schedules'),
+                    color: Colors.cyan.shade700,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const AiToolsScreen(initialTab: 1)),
+                  ),
+                  _buildDeskAction(
+                    icon: Icons.work_outline,
+                    label: locale.t('nav.notices'),
+                    color: Colors.brown,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const PortalsScreen()),
+                  ),
+                  _buildDeskAction(
+                    icon: Icons.leaderboard_outlined,
+                    label: locale.t('nav.leaderboard'),
+                    color: Colors.orange.shade700,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const CommunityScreen(initialTab: 0)),
+                  ),
+                  _buildDeskAction(
+                    icon: Icons.workspace_premium_outlined,
+                    label: locale.t('nav.plans'),
+                    color: primary,
+                    surface: surface,
+                    border: border,
+                    textColor: textColor,
+                    onTap: () => _push(const PlansScreen()),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+
+              // 7. Recent Exam Results & Leaderboard Preview
+              if (data != null && data.recentExams.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      locale.t('dashboard.recent_exams'),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    TextButton(
+                      onPressed: () => _push(const ExamsScreen()),
+                      child: Text(locale.t('common.view_all'), style: TextStyle(color: primary)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ...data.recentExams.take(3).map((ex) {
+                  final map = ex is Map<String, dynamic> ? ex : <String, dynamic>{};
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(Icons.assignment_turned_in, color: primary),
+                      title: Text(map['title']?.toString() ?? 'মডেল টেস্ট',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                      subtitle: Text('স্কোর: ${map['score'] ?? 0} / ${map['total_marks'] ?? 0}'),
+                      onTap: () => _push(const ExamsScreen()),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+              ],
+
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -673,84 +620,113 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildStatTile(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required IconData icon,
-    required bool isDark,
-  }) {
+  Widget _buildPendingPaymentAlert(
+    PendingOrderModel order,
+    Color primary,
+    Color surface,
+    Color textColor,
+    Color muted,
+    LocaleProvider locale,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? SikhunTheme.darkSurface2 : Colors.white.withAlpha(220),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
-        ),
+        color: SikhunTheme.warning.withAlpha(24),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: SikhunTheme.warning.withAlpha(110)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              const Icon(Icons.hourglass_top_rounded, color: SikhunTheme.warning, size: 20),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                  ),
+                  '${locale.t('dashboard.payment_pending')} (${order.orderNumber} • ৳${order.amount.toStringAsFixed(0)})',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: textColor),
                 ),
               ),
-              Icon(icon, size: 16, color: const Color(0xFF8A5A32)),
             ],
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: isDark ? SikhunTheme.darkText : SikhunTheme.textDark,
-            ),
+          const SizedBox(height: 6),
+          Text(locale.t('dashboard.payment_pending_desc'),
+              style: TextStyle(fontSize: 12, color: muted)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              ElevatedButton(
+                onPressed: () => _push(WalletScreen(verifyOrderId: order.id)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SikhunTheme.warning,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                child: Text(locale.t('dashboard.verify_trx'), style: const TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => _push(const CommunityScreen(initialTab: 2)),
+                child: Text(locale.t('dashboard.contact_support'), style: const TextStyle(fontSize: 12)),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDeskToolPill({
-    required String label,
+  Widget _buildStatCard({
+    required String title,
+    required String value,
     required IconData icon,
-    required bool isDark,
+    required Color iconColor,
+    required Color surface,
+    required Color border,
+    required Color textColor,
+    required Color muted,
     required VoidCallback onTap,
   }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: isDark ? SikhunTheme.darkSurface : SikhunTheme.lightSurface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder),
+            color: surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border),
           ),
-          child: Column(
+          child: Row(
             children: [
-              Icon(icon, size: 20, color: const Color(0xFF8A5A32)),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: iconColor.withAlpha(24),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value,
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textColor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      title,
+                      style: TextStyle(fontSize: 11, color: muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -759,144 +735,154 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildStudentDrawer(
-    BuildContext context,
-    AuthProvider auth,
-    LocaleProvider localeProv,
-    ThemeProvider themeProv,
-  ) {
-    final user = auth.user;
-    final isDark = themeProv.isDarkMode;
-
-    return Drawer(
-      backgroundColor: isDark ? SikhunTheme.darkSurface : SikhunTheme.lightBg,
-      child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
+  Widget _buildDeskAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color surface,
+    required Color border,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: const Color(0xFF8A5A32),
-                    child: Text(
-                      user != null && user.name.isNotEmpty ? user.name[0].toUpperCase() : 'র',
-                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.name ?? 'Mokaddes Hosain',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          user?.email ?? 'support@sikhun.com',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? SikhunTheme.darkTextMuted : SikhunTheme.mutedDark,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withAlpha(22),
+                shape: BoxShape.circle,
               ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.home_outlined),
-              title: Text(localeProv.t('nav.dashboard')),
-              onTap: () => Navigator.of(context).pop(),
-            ),
-            ListTile(
-              leading: const Icon(Icons.menu_book_outlined),
-              title: Text(localeProv.t('nav.library')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/library');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.quiz_outlined),
-              title: Text(localeProv.t('nav.question_bank')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/question-bank');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.history_edu_outlined),
-              title: Text(localeProv.t('nav.mistakes')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/mistakes');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.fact_check_outlined),
-              title: Text(localeProv.t('nav.exams')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/exams');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.school_outlined),
-              title: Text(localeProv.t('nav.courses')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/courses');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: Text(localeProv.t('nav.wallet')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/wallet');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.card_membership_outlined),
-              title: Text(localeProv.t('nav.plans')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/plans');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.leaderboard_outlined),
-              title: Text(localeProv.t('nav.leaderboard')),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openWeb('/leaderboard');
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.cloud_off_outlined),
-              title: Text(localeProv.t('offline.mode')),
-              subtitle: Text(localeProv.t('offline.read_offline')),
-              trailing: Switch(
-                value: Provider.of<OfflineService>(context).isOfflineMode,
-                onChanged: (val) {
-                  Provider.of<OfflineService>(context, listen: false).setOfflineMode(val);
-                },
-              ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textColor),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildNavigationDrawer({
+    required bool isDark,
+    required Color surface,
+    required Color primary,
+    required Color textColor,
+    required Color muted,
+    required Color border,
+    required LocaleProvider locale,
+    required AuthProvider auth,
+    required bool canSeeQuestionBank,
+  }) {
+    return Drawer(
+      backgroundColor: surface,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                children: [
+                  SikhunBrandLogo(
+                    compact: true,
+                    markSize: 34,
+                    showTagline: true,
+                    isBangla: locale.isBengali,
+                  ),
+                ],
+              ),
+            ),
+            Divider(color: border),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                children: [
+                  _drawerItem(Icons.menu_book_outlined, locale.t('nav.library'),
+                      () => _push(const LibraryScreen())),
+                  _drawerItem(Icons.bookmarks_outlined, locale.t('nav.bookshelf'),
+                      () => _push(const BookshelfScreen())),
+                  _drawerItem(Icons.play_circle_outline, locale.t('nav.courses'),
+                      () => _push(const CoursesScreen())),
+                  const Divider(),
+                  if (canSeeQuestionBank)
+                    _drawerItem(Icons.assignment_turned_in_outlined, locale.t('nav.question_bank'),
+                        () => _push(const QuestionBankScreen())),
+                  _drawerItem(Icons.bookmark_remove_outlined, locale.t('nav.mistakes'),
+                      () => _push(const MistakeReviewScreen())),
+                  _drawerItem(Icons.quiz_outlined, locale.t('nav.exams'),
+                      () => _push(const ExamsScreen())),
+                  _drawerItem(Icons.style_outlined, locale.t('nav.flashcards'),
+                      () => _push(const FlashcardsScreen())),
+                  _drawerItem(Icons.rate_review_outlined, locale.t('nav.essays'),
+                      () => _push(const AiToolsScreen(initialTab: 0))),
+                  _drawerItem(Icons.calendar_month_outlined, locale.t('nav.schedules'),
+                      () => _push(const AiToolsScreen(initialTab: 1))),
+                  const Divider(),
+                  _drawerItem(Icons.smart_toy_outlined, locale.t('nav.ai_chat'),
+                      () => _push(const AiChatScreen())),
+                  _drawerItem(Icons.school_outlined, locale.t('nav.admissions'),
+                      () => _push(const PortalsScreen(initialTab: 0))),
+                  _drawerItem(Icons.work_outline, locale.t('nav.jobs'),
+                      () => _push(const PortalsScreen(initialTab: 1))),
+                  _drawerItem(Icons.article_outlined, locale.t('nav.blog'),
+                      () => _push(const BlogListScreen())),
+                  const Divider(),
+                  _drawerItem(Icons.workspace_premium_outlined, locale.t('nav.plans'),
+                      () => _push(const PlansScreen())),
+                  _drawerItem(Icons.account_balance_wallet_outlined, locale.t('nav.wallet'),
+                      () => _push(const WalletScreen())),
+                  _drawerItem(Icons.leaderboard_outlined, locale.t('nav.leaderboard'),
+                      () => _push(const CommunityScreen(initialTab: 0))),
+                  _drawerItem(Icons.card_giftcard_outlined, locale.t('nav.referrals'),
+                      () => _push(const CommunityScreen(initialTab: 1))),
+                  _drawerItem(Icons.support_agent_outlined, locale.t('nav.support'),
+                      () => _push(const CommunityScreen(initialTab: 2))),
+                  _drawerItem(Icons.settings_outlined, locale.t('nav.profile_settings'),
+                      () => _push(const ProfileScreen())),
+                ],
+              ),
+            ),
+            Divider(color: border),
+            ListTile(
+              leading: const Icon(Icons.logout, color: SikhunTheme.danger),
+              title: Text(locale.t('common.logout'),
+                  style: const TextStyle(color: SikhunTheme.danger, fontWeight: FontWeight.bold)),
+              onTap: () async {
+                Navigator.pop(context);
+                await auth.logout();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, size: 20, color: SikhunTheme.primary),
+      title: Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
     );
   }
 }

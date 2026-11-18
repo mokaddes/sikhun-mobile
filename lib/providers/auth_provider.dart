@@ -40,8 +40,9 @@ class AuthProvider extends ChangeNotifier {
       if (token != null) {
         await ApiService.setToken(token.toString());
       }
-      if (response.data['user'] != null) {
-        _user = UserModel.fromJson(response.data['user']);
+      final rawStudent = response.data['student'] ?? response.data['user'];
+      if (rawStudent is Map<String, dynamic>) {
+        _user = UserModel.fromJson(rawStudent);
       } else {
         await fetchProfile();
       }
@@ -60,13 +61,13 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String passwordConfirmation,
     String? phone,
-    String? studentType,
-    String? educationLevel,
+    String studentType = 'admission',
   }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
+    final normalizedType = studentType.toLowerCase();
     final response = await ApiService.post(
       ApiEndpoints.register,
       body: {
@@ -74,9 +75,8 @@ class AuthProvider extends ChangeNotifier {
         'email': email,
         'password': password,
         'password_confirmation': passwordConfirmation,
-        'phone': phone,
-        'student_type': studentType,
-        'education_level': educationLevel,
+        'type': normalizedType,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
       },
     );
 
@@ -86,8 +86,9 @@ class AuthProvider extends ChangeNotifier {
       if (token != null) {
         await ApiService.setToken(token.toString());
       }
-      if (response.data['user'] != null) {
-        _user = UserModel.fromJson(response.data['user']);
+      final rawStudent = response.data['student'] ?? response.data['user'];
+      if (rawStudent is Map<String, dynamic>) {
+        _user = UserModel.fromJson(rawStudent);
       } else {
         await fetchProfile();
       }
@@ -103,10 +104,74 @@ class AuthProvider extends ChangeNotifier {
   Future<void> fetchProfile() async {
     final response = await ApiService.get(ApiEndpoints.me);
     if (response.success && response.data != null) {
-      final userData = response.data['user'] ?? response.data;
-      _user = UserModel.fromJson(userData);
+      final userData = response.data['student'] ?? response.data['user'] ?? response.data;
+      if (userData is Map<String, dynamic>) {
+        _user = UserModel.fromJson(userData);
+        notifyListeners();
+      }
+    } else if (response.statusCode == 401) {
+      await ApiService.clearToken();
+      _user = null;
       notifyListeners();
     }
+  }
+
+  Future<ApiResponse> updateProfile({
+    String? name,
+    String? phone,
+    String? institution,
+    String? type,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (phone != null) body['phone'] = phone;
+    if (institution != null) body['institution'] = institution;
+    if (type != null) body['type'] = type.toLowerCase();
+
+    final response = await ApiService.put(ApiEndpoints.profile, body: body);
+    _isLoading = false;
+    if (response.success && response.data is Map<String, dynamic>) {
+      _user = UserModel.fromJson(response.data as Map<String, dynamic>);
+    }
+    notifyListeners();
+    return response;
+  }
+
+  Future<ApiResponse> updatePassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    return ApiService.put(
+      ApiEndpoints.updatePassword,
+      body: {
+        'current_password': currentPassword,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
+    );
+  }
+
+  Future<ApiResponse> updateLeaderboardOptOut(bool optOut) async {
+    final res = await ApiService.put(
+      ApiEndpoints.updateLeaderboardOptOut,
+      body: {'leaderboard_opt_out': optOut},
+    );
+    if (res.success && res.data is Map<String, dynamic>) {
+      _user = UserModel.fromJson(res.data as Map<String, dynamic>);
+      notifyListeners();
+    }
+    return res;
+  }
+
+  Future<ApiResponse> forgotPassword(String email) async {
+    return ApiService.post(ApiEndpoints.forgotPassword, body: {'email': email});
+  }
+
+  Future<ApiResponse> sendVerificationEmail() async {
+    return ApiService.post(ApiEndpoints.sendVerification);
   }
 
   Future<void> logout() async {

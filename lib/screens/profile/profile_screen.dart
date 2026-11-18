@@ -1,203 +1,488 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/api_endpoints.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/app_setting_provider.dart';
-import '../../providers/notification_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../providers/locale_provider.dart';
-import '../../services/offline_service.dart';
+import '../../providers/question_bank_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../services/api_service.dart';
+import '../../widgets/sikhun_brand_logo.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
-import '../dashboard/student_dashboard_screen.dart';
+import '../bookshelf/bookshelf_screen.dart';
+import '../community/community_screen.dart';
 import '../notifications/notification_screen.dart';
+import '../plans/plans_screen.dart';
+import '../wallet/wallet_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _openWalletRecharge() async {
-    const url = 'https://sikhun.com/wallet';
+  Future<void> _launchWeb(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
   }
 
-  Future<void> _launchUri(String uriString) async {
-    final uri = Uri.parse(uriString);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+  Future<void> _showEditProfileDialog(BuildContext context, AuthProvider auth) async {
+    final user = auth.user;
+    if (user == null) return;
+
+    final nameCtrl = TextEditingController(text: user.name);
+    final phoneCtrl = TextEditingController(text: user.phone ?? '');
+    final instCtrl = TextEditingController(text: user.institution ?? '');
+    String selectedType = user.type;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('প্রোফাইল ও স্টাডি লক্ষ্য পরিবর্তন',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'পূর্ণ নাম'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'মোবাইল নম্বর'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: instCtrl,
+                  decoration: const InputDecoration(labelText: 'শিক্ষাপ্রতিষ্ঠান'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: const ['admission', 'job', 'hsc', 'ssc', 'university'].contains(selectedType)
+                      ? selectedType
+                      : 'admission',
+                  decoration: const InputDecoration(labelText: 'শিক্ষা বিভাগ / স্টাডি লক্ষ্য'),
+                  items: const [
+                    DropdownMenuItem(value: 'admission', child: Text('বিশ্ববিদ্যালয় ভর্তি প্রস্তুতি')),
+                    DropdownMenuItem(value: 'job', child: Text('বিসিএস ও চাকরি প্রস্তুতি')),
+                    DropdownMenuItem(value: 'hsc', child: Text('উচ্চ মাধ্যমিক (HSC)')),
+                    DropdownMenuItem(value: 'ssc', child: Text('মাধ্যমিক (SSC)')),
+                    DropdownMenuItem(value: 'university', child: Text('বিশ্ববিদ্যালয় একাডেমিক')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setS(() => selectedType = v);
+                  },
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final res = await auth.updateProfile(
+                        name: nameCtrl.text.trim(),
+                        phone: phoneCtrl.text.trim(),
+                        institution: instCtrl.text.trim(),
+                        type: selectedType,
+                      );
+                      if (!context.mounted) return;
+                      if (res.success) {
+                        await context.read<DashboardProvider>().fetchDashboard();
+                        if (context.mounted) {
+                          await context.read<QuestionBankProvider>().init();
+                        }
+                      }
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              res.success ? 'প্রোফাইল সফলভাবে আপডেট হয়েছে!' : (res.message ?? 'ব্যর্থ হয়েছে'),
+                            ),
+                            backgroundColor: res.success ? SikhunTheme.success : SikhunTheme.danger,
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('সংরক্ষণ করুন'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showChangePasswordDialog(BuildContext context, AuthProvider auth) async {
+    final curCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('পাসওয়ার্ড পরিবর্তন'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: curCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'বর্তমান পাসওয়ার্ড'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: newCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'নতুন পাসওয়ার্ড (সর্বনিম্ন ৮ অক্ষর)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: confCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'নতুন পাসওয়ার্ড নিশ্চিত করুন'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('বাতিল')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final res = await auth.updatePassword(
+                currentPassword: curCtrl.text,
+                password: newCtrl.text,
+                passwordConfirmation: confCtrl.text,
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    res.success ? 'পাসওয়ার্ড পরিবর্তন হয়েছে!' : (res.message ?? 'পরিবর্তন ব্যর্থ'),
+                  ),
+                  backgroundColor: res.success ? SikhunTheme.success : SikhunTheme.danger,
+                ),
+              );
+            },
+            child: const Text('আপডেট'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showFeedbackDialog(BuildContext context) async {
+    final msgCtrl = TextEditingController();
+    int rating = 5;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('অ্যাপ ও প্ল্যাটফর্ম সম্পর্কে মতামত'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (i) {
+                  return IconButton(
+                    icon: Icon(
+                      i < rating ? Icons.star : Icons.star_border,
+                      color: SikhunTheme.primary,
+                    ),
+                    onPressed: () => setS(() => rating = i + 1),
+                  );
+                }),
+              ),
+              TextField(
+                controller: msgCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'আপনার পরামর্শ বা মতামত লিখুন...'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('বাতিল')),
+            ElevatedButton(
+              onPressed: () async {
+                if (msgCtrl.text.trim().isEmpty) return;
+                Navigator.pop(ctx);
+                final res = await ApiService.post(
+                  ApiEndpoints.feedback,
+                  body: {
+                    'type': 'feedback',
+                    'rating': rating,
+                    'message': msgCtrl.text.trim(),
+                  },
+                );
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(res.success ? 'ধন্যবাদ! আপনার মতামত পাঠানো হয়েছে।' : (res.message ?? 'ব্যর্থ হয়েছে')),
+                    backgroundColor: res.success ? SikhunTheme.success : SikhunTheme.danger,
+                  ),
+                );
+              },
+              child: const Text('পাঠান'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final appSetting = Provider.of<AppSettingProvider>(context);
-    final notifProv = Provider.of<NotificationProvider>(context);
     final themeProv = Provider.of<ThemeProvider>(context);
-    final localeProv = Provider.of<LocaleProvider>(context);
-    final offlineService = Provider.of<OfflineService>(context);
+    final locale = Provider.of<LocaleProvider>(context);
     final user = auth.user;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('প্রোফাইল ও সেটিংস'),
+        actions: [
+          if (auth.isAuthenticated)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'প্রোফাইল এডিট',
+              onPressed: () => _showEditProfileDialog(context, auth),
+            ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationScreen()),
+              );
+            },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // User Header
-            if (auth.isAuthenticated && user != null) ...[
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+        children: [
+          // Brand Identity Card
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  SikhunBrandLogo(compact: true, markSize: 34, isBangla: locale.isBengali),
+                  const Spacer(),
+                  const Text('Official App',
+                      style: TextStyle(fontSize: 11, color: SikhunTheme.mutedDark)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          if (auth.isAuthenticated && user != null) ...[
+            Card(
+              elevation: 1.5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(18.0),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: SikhunTheme.primary.withAlpha(30),
-                      child: Text(
-                        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: SikhunTheme.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      user.name,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user.email,
-                      style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 13),
-                    ),
-                    if (user.studentType != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: SikhunTheme.primary.withAlpha(20),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'ক্যাটাগরি: ${user.studentType}',
-                          style: const TextStyle(fontSize: 12, color: SikhunTheme.primary, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Wallet Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      SikhunTheme.primary,
-                      SikhunTheme.primary.withAlpha(190),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(40),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.account_balance_wallet, color: Colors.white, size: 28),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'ওয়ালেট ব্যালেন্স',
-                            style: TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                          Text(
-                            '৳${user.walletBalance.toStringAsFixed(2)}',
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 30,
+                          backgroundColor: SikhunTheme.primary.withAlpha(30),
+                          child: Text(
+                            user.name.isNotEmpty ? user.name[0].toUpperCase() : 'S',
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color: SikhunTheme.primary,
                             ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(user.name,
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 2),
+                              Text(user.email,
+                                  style: const TextStyle(color: SikhunTheme.mutedDark, fontSize: 13)),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: SikhunTheme.primary.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  user.typeLabelBn,
+                                  style: const TextStyle(
+                                    color: SikhunTheme.primary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: SikhunTheme.primary),
+                          onPressed: () => _showEditProfileDialog(context, auth),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 26),
+                    InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const WalletScreen()),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.account_balance_wallet, color: SikhunTheme.accent),
+                              SizedBox(width: 8),
+                              Text('ওয়ালেট ব্যালেন্স', style: TextStyle(fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                '৳${user.walletBalance.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: SikhunTheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.chevron_right, size: 18),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: SikhunTheme.primary,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      onPressed: _openWalletRecharge,
-                      child: const Text('রিচার্জ', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-            ] else ...[
-              // Guest Card
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+            ),
+            const SizedBox(height: 16),
+
+            // Account & Subscriptions Section (Native!)
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.workspace_premium_outlined, color: SikhunTheme.primary),
+                    title: const Text('সাবস্ক্রিপশন ও কাস্টম প্ল্যান'),
+                    subtitle: const Text('সাধারণ, ভর্তি ও চাকরি বান্ডেল দেখুন'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PlansScreen()),
                     ),
-                  ],
-                ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.account_balance_wallet_outlined, color: SikhunTheme.accent),
+                    title: const Text('ওয়ালেট, ইনভয়েস ও কুপন রিডিম'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.bookmarks_outlined, color: Colors.blueAccent),
+                    title: const Text('আমার বুকশেলফ ও নিজস্ব PDF বই'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const BookshelfScreen()),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.card_giftcard_outlined, color: SikhunTheme.success),
+                    title: const Text('রেফারেল ও বোনাস'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CommunityScreen(initialTab: 1)),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.support_agent_outlined, color: SikhunTheme.primary),
+                    title: const Text('সাপোর্ট ও হেল্প ডেস্ক'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CommunityScreen(initialTab: 2)),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.lock_reset_outlined, color: SikhunTheme.primary),
+                    title: const Text('পাসওয়ার্ড পরিবর্তন করুন'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showChangePasswordDialog(context, auth),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            Card(
+              elevation: 1.5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Icon(Icons.account_circle_outlined, size: 64, color: SikhunTheme.primary),
+                    const Icon(Icons.account_circle_outlined, size: 54, color: SikhunTheme.primary),
                     const SizedBox(height: 12),
                     const Text(
-                      'অ্যাকাউন্টে প্রবেশ করুন',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      'শিখুন অ্যাকাউন্টে সাইন-ইন করুন',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'বই বুকশেলফে যোগ করা, ওয়ালেট ব্যবহার এবং শিক্ষার্থী ড্যাশবোর্ডে প্রবেশ করতে লগইন করুন',
+                      'আপনার বই, প্রশ্নব্যাংক, এআই চ্যাট এবং পরীক্ষার অগ্রগতি সংরক্ষণ করতে লগইন করুন।',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: SikhunTheme.mutedDark, fontSize: 13),
+                      style: TextStyle(fontSize: 12, color: SikhunTheme.mutedDark),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                              );
+                            },
+                            child: const Text('রেজিস্টার'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
@@ -208,263 +493,130 @@ class ProfileScreen extends StatelessWidget {
                             child: const Text('লগইন'),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                              );
-                            },
-                            child: const Text('রেজিস্ট্রেশন'),
-                          ),
-                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-            ],
-
-            // Student Dashboard & Notifications Options
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              child: Column(
-                children: [
-                  if (auth.isAuthenticated) ...[
-                    ListTile(
-                      leading: const Icon(Icons.dashboard_customize_outlined, color: Color(0xFF78350F)),
-                      title: const Text('শিক্ষার্থী ড্যাশবোর্ড', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('পড়াশোনা, পরিসংখ্যান, ভুল খাতা ও লিডারবোর্ড'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const StudentDashboardScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                  ],
-                  ListTile(
-                    leading: const Icon(Icons.notifications_active_outlined, color: SikhunTheme.primary),
-                    title: const Text('নোটিফিকেশন সেন্টার'),
-                    subtitle: notifProv.unreadCount > 0
-                        ? Text('${notifProv.unreadCount} টি অপঠিত নোটিফিকেশন', style: const TextStyle(color: Colors.redAccent, fontSize: 12))
-                        : const Text('সর্বশেষ আপডেট ও ফলাফল'),
-                    trailing: notifProv.unreadCount > 0
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10)),
-                            child: Text(
-                              '${notifProv.unreadCount}',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        : const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const NotificationScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 16),
-
-            // App Appearance, Language & Offline Settings
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      themeProv.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                      color: const Color(0xFF8A5A32),
-                    ),
-                    title: Text(localeProv.isBengali ? 'ডার্ক মোড (Dark Theme)' : 'Dark Theme'),
-                    subtitle: Text(
-                      themeProv.isDarkMode
-                          ? (localeProv.isBengali ? 'অন করা আছে' : 'Enabled')
-                          : (localeProv.isBengali ? 'অফ করা আছে (ওয়ার্ম পেপার থিম)' : 'Disabled (Warm Paper Theme)'),
-                    ),
-                    trailing: Switch(
-                      value: themeProv.isDarkMode,
-                      activeTrackColor: const Color(0xFF8A5A32),
-                      onChanged: (val) => themeProv.toggleTheme(),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.language_outlined, color: Color(0xFF8A5A32)),
-                    title: Text(localeProv.isBengali ? 'ভাষা পরিবর্তন (Language)' : 'Language (ভাষা)'),
-                    subtitle: Text(localeProv.isBengali ? 'বাংলা (Bangla)' : 'English'),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8A5A32).withAlpha(20),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        localeProv.isBengali ? 'বাং' : 'EN',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8A5A32)),
-                      ),
-                    ),
-                    onTap: () => localeProv.toggleLocale(),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.cloud_off_outlined, color: Color(0xFF8A5A32)),
-                    title: Text(localeProv.t('offline.mode')),
-                    subtitle: Text(
-                      '${offlineService.offlineBooks.length} ${localeProv.isBengali ? 'টি বই সেভ করা আছে' : 'books cached'}',
-                    ),
-                    trailing: Switch(
-                      value: offlineService.isOfflineMode,
-                      activeTrackColor: const Color(0xFF8A5A32),
-                      onChanged: (val) => offlineService.setOfflineMode(val),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Sikhun Platform Links & Support
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.language, color: SikhunTheme.primary),
-                    title: const Text('ওয়েবসাইট ভিজিট করুন'),
-                    subtitle: const Text('sikhun.com'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () => _launchUri('https://sikhun.com'),
-                  ),
-                  if (appSetting.settings.sitePhone != null && appSetting.settings.sitePhone!.isNotEmpty) ...[
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.phone_outlined, color: SikhunTheme.primary),
-                      title: const Text('হেল্পলাইন'),
-                      subtitle: Text(appSetting.settings.sitePhone!),
-                      trailing: const Icon(Icons.call_outlined, size: 18),
-                      onTap: () => _launchUri('tel:${appSetting.settings.sitePhone}'),
-                    ),
-                  ],
-                  if (appSetting.settings.siteEmail != null && appSetting.settings.siteEmail!.isNotEmpty) ...[
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.email_outlined, color: SikhunTheme.primary),
-                      title: const Text('সাপোর্ট ইমেইল'),
-                      subtitle: Text(appSetting.settings.siteEmail!),
-                      trailing: const Icon(Icons.mail_outline, size: 18),
-                      onTap: () => _launchUri('mailto:${appSetting.settings.siteEmail}'),
-                    ),
-                  ],
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.policy_outlined, color: SikhunTheme.primary),
-                    title: const Text('গোপনীয়তা নীতি ও শর্তাবলী'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () => _launchUri('https://sikhun.com/terms'),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline, color: SikhunTheme.primary),
-                    title: const Text('অ্যাপ সম্পর্কে'),
-                    subtitle: Text('Sikhun Mobile v${appSetting.settings.appVersion}'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                    onTap: () {
-                      showAboutDialog(
-                        context: context,
-                        applicationName: appSetting.siteName,
-                        applicationVersion: appSetting.settings.appVersion,
-                        applicationIcon: (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty)
-                            ? CachedNetworkImage(
-                                imageUrl: appSetting.logoUrl!,
-                                width: 44,
-                                height: 44,
-                                fit: BoxFit.contain,
-                              )
-                            : const Icon(Icons.auto_stories, color: SikhunTheme.primary, size: 40),
-                        children: [
-                          Text('${appSetting.siteTagline}\nশিখুন বাংলাদেশের একটি আধুনিক স্মার্ট লার্নিং ও রিডিং প্ল্যাটফর্ম।'),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Dynamic Branding Footer
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  if (appSetting.logoUrl != null && appSetting.logoUrl!.isNotEmpty)
-                    CachedNetworkImage(
-                      imageUrl: appSetting.logoUrl!,
-                      height: 28,
-                      fit: BoxFit.contain,
-                      errorWidget: (c, u, e) => const SizedBox(),
-                    ),
-                  const SizedBox(height: 4),
-                  Text(
-                    appSetting.siteTagline,
-                    style: const TextStyle(fontSize: 12, color: SikhunTheme.mutedDark),
-                  ),
-                ],
-              ),
-            ),
-
-            if (auth.isAuthenticated) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.logout, color: SikhunTheme.danger),
-                  label: const Text('লগআউট করুন', style: TextStyle(color: SikhunTheme.danger, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: SikhunTheme.danger),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('লগআউট'),
-                        content: const Text('আপনি কি নিশ্চিত যে লগআউট করতে চান?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('না'),
-                          ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: SikhunTheme.danger),
-                            onPressed: () {
-                              Navigator.of(ctx).pop();
-                              auth.logout();
-                            },
-                            child: const Text('লগআউট'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 32),
           ],
-        ),
+
+          // Preferences (Dark Mode, Language, Leaderboard Opt-Out)
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('ডার্ক মোড (Dark Mode)'),
+                  secondary: const Icon(Icons.dark_mode_outlined),
+                  value: themeProv.isDarkMode,
+                  onChanged: (_) => themeProv.toggleTheme(),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.language),
+                  title: const Text('ভাষা (Language)'),
+                  subtitle: Text(locale.isBengali ? 'বাংলা' : 'English'),
+                  trailing: const Text('পরিবর্তন', style: TextStyle(color: SikhunTheme.primary)),
+                  onTap: () => locale.toggleLocale(),
+                ),
+                if (auth.isAuthenticated && user != null) ...[
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('লিডারবোর্ডে আমার নাম লুকিয়ে রাখুন'),
+                    secondary: const Icon(Icons.visibility_off_outlined),
+                    value: user.leaderboardOptOut,
+                    onChanged: (val) async {
+                      final res = await auth.updateLeaderboardOptOut(val);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              res.success ? 'লিডারবোর্ড সেটিংস আপডেট হয়েছে' : (res.message ?? 'ব্যর্থ হয়েছে'),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Support & Policies
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              children: [
+                if (auth.isAuthenticated) ...[
+                  ListTile(
+                    leading: const Icon(Icons.rate_review_outlined, color: SikhunTheme.primary),
+                    title: const Text('মতামত / ফিডব্যাক পাঠান'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showFeedbackDialog(context),
+                  ),
+                  const Divider(height: 1),
+                ],
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined, color: SikhunTheme.primary),
+                  title: const Text('প্রাইভেসি পলিসি'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _launchWeb('${ApiEndpoints.siteUrl}/privacy'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined, color: SikhunTheme.primary),
+                  title: const Text('শর্তাবলি (Terms)'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => _launchWeb('${ApiEndpoints.siteUrl}/terms'),
+                ),
+                const Divider(height: 1),
+                const ListTile(
+                  leading: Icon(Icons.info_outline, color: SikhunTheme.primary),
+                  title: Text('ভার্সন'),
+                  subtitle: Text('SIKHUN Mobile v2.0.0 (Production)'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          if (auth.isAuthenticated)
+            ElevatedButton.icon(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('লগআউট'),
+                    content: const Text('আপনি কি শিখুন অ্যাপ থেকে লগআউট করতে চান?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('না')),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: SikhunTheme.danger),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('হ্যাঁ, লগআউট'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await auth.logout();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SikhunTheme.danger.withAlpha(25),
+                foregroundColor: SikhunTheme.danger,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.logout),
+              label: const Text('লগআউট করুন', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          const SizedBox(height: 40),
+        ],
       ),
     );
   }

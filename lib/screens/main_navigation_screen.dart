@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/locale_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../config/theme.dart';
+import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
+import 'ai_chat/ai_chat_screen.dart';
 import 'dashboard/student_dashboard_screen.dart';
+import 'exams/exams_screen.dart';
 import 'home/home_screen.dart';
 import 'library/library_screen.dart';
-import 'question_bank/question_bank_screen.dart';
-import 'ai_chat/ai_chat_screen.dart';
 import 'profile/profile_screen.dart';
+import 'question_bank/question_bank_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -23,89 +23,93 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-    final localeProv = Provider.of<LocaleProvider>(context);
-    final themeProv = Provider.of<ThemeProvider>(context);
-    final isDark = themeProv.isDarkMode;
+    final auth = context.watch<AuthProvider>();
+    final locale = context.watch<LocaleProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Screens list:
-    // If student is authenticated, index 0 is StudentDashboardScreen (Image 3)
-    // If guest, index 0 is HomeScreen (landing page)
+    // Web parity: SSC / HSC / University students cannot see Question Bank menu
+    final showQuestionBank = !auth.isAuthenticated || (auth.user?.canAccessQuestionBank ?? true);
+
     final List<Widget> screens = [
       auth.isAuthenticated ? const StudentDashboardScreen() : const HomeScreen(),
       const LibraryScreen(),
       const AiChatScreen(),
-      const QuestionBankScreen(),
+      showQuestionBank ? const QuestionBankScreen() : const ExamsScreen(),
       const ProfileScreen(),
     ];
 
+    final safeIndex = _currentIndex.clamp(0, screens.length - 1);
+
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: safeIndex,
         children: screens,
-      ),
-      // Floating Speech Bubble in Bottom Right (Matching Image 3)
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            _currentIndex = 2; // Jump to AI Chat
-          });
-        },
-        backgroundColor: const Color(0xFF8A5A32),
-        foregroundColor: Colors.white,
-        elevation: 3,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.chat_bubble_outline, size: 24),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: isDark ? SikhunTheme.darkSurface : SikhunTheme.lightSurface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(isDark ? 30 : 12),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+          border: Border(
+            top: BorderSide(
+              color: isDark ? SikhunTheme.darkBorder : SikhunTheme.lightBorder,
+              width: 1,
             ),
-          ],
+          ),
         ),
         child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
+          height: 68,
+          selectedIndex: safeIndex,
           backgroundColor: isDark ? SikhunTheme.darkSurface : SikhunTheme.lightSurface,
-          indicatorColor: const Color(0xFF8A5A32).withAlpha(40),
+          indicatorColor: (isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary).withAlpha(32),
+          onDestinationSelected: (index) {
+            setState(() => _currentIndex = index);
+          },
           destinations: [
             NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: const Icon(Icons.home, color: Color(0xFF8A5A32)),
-              label: localeProv.t('nav.dashboard'),
+              icon: Icon(auth.isAuthenticated ? Icons.dashboard_outlined : Icons.home_outlined),
+              selectedIcon: Icon(auth.isAuthenticated ? Icons.dashboard : Icons.home),
+              label: auth.isAuthenticated ? locale.t('nav.dashboard') : locale.t('nav.home'),
             ),
             NavigationDestination(
               icon: const Icon(Icons.menu_book_outlined),
-              selectedIcon: const Icon(Icons.menu_book, color: Color(0xFF8A5A32)),
-              label: localeProv.t('nav.library'),
+              selectedIcon: const Icon(Icons.menu_book),
+              label: locale.t('nav.library'),
             ),
             NavigationDestination(
-              icon: const Icon(Icons.auto_awesome_outlined),
-              selectedIcon: const Icon(Icons.auto_awesome, color: Color(0xFF8A5A32)),
-              label: localeProv.t('nav.ai_chat'),
+              icon: const Icon(Icons.smart_toy_outlined),
+              selectedIcon: const Icon(Icons.smart_toy),
+              label: locale.t('nav.ai_chat'),
             ),
+            if (showQuestionBank)
+              NavigationDestination(
+                icon: const Icon(Icons.assignment_turned_in_outlined),
+                selectedIcon: const Icon(Icons.assignment_turned_in),
+                label: locale.t('nav.question_bank'),
+              )
+            else
+              NavigationDestination(
+                icon: const Icon(Icons.quiz_outlined),
+                selectedIcon: const Icon(Icons.quiz),
+                label: locale.t('nav.exams'),
+              ),
             NavigationDestination(
-              icon: const Icon(Icons.assignment_outlined),
-              selectedIcon: const Icon(Icons.assignment, color: Color(0xFF8A5A32)),
-              label: localeProv.t('nav.exams'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.settings_outlined),
-              selectedIcon: const Icon(Icons.settings, color: Color(0xFF8A5A32)),
-              label: localeProv.t('nav.profile_settings'),
+              icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person),
+              label: locale.t('nav.profile'),
             ),
           ],
         ),
       ),
+      floatingActionButton: safeIndex == 0
+          ? FloatingActionButton.small(
+              heroTag: 'quick_ai_fab',
+              backgroundColor: isDark ? SikhunTheme.darkPrimary : SikhunTheme.primary,
+              foregroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+              onPressed: () {
+                setState(() => _currentIndex = 2);
+              },
+              tooltip: locale.t('nav.ai_chat'),
+              child: const Icon(Icons.auto_awesome),
+            )
+          : null,
     );
   }
 }

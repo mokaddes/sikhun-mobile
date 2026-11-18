@@ -1,6 +1,8 @@
 class ChapterModel {
   final int id;
   final int bookId;
+  final int? parentId;
+  final int level;
   final String title;
   final int chapterNumber;
   final int pageStart;
@@ -8,11 +10,14 @@ class ChapterModel {
   final double price;
   final bool isFree;
   final bool isPurchased;
+  final bool purchasable;
   final String? readerUrl;
 
   ChapterModel({
     required this.id,
     required this.bookId,
+    this.parentId,
+    this.level = 1,
     required this.title,
     this.chapterNumber = 1,
     this.pageStart = 1,
@@ -20,22 +25,34 @@ class ChapterModel {
     this.price = 0.0,
     this.isFree = false,
     this.isPurchased = false,
+    this.purchasable = false,
     this.readerUrl,
   });
 
   factory ChapterModel.fromJson(Map<String, dynamic> json) {
+    final parsedPrice = json['price'] != null
+        ? double.tryParse(json['price'].toString()) ?? 0.0
+        : 0.0;
+    final owned = json['owned'] == true ||
+        json['is_purchased'] == true ||
+        json['purchased'] == true;
+    final free = json['is_free'] == true ||
+        json['is_free'] == 1 ||
+        (json['purchasable'] == false && owned);
+
     return ChapterModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       bookId: json['book_id'] is int ? json['book_id'] : int.tryParse(json['book_id']?.toString() ?? '0') ?? 0,
+      parentId: json['parent_id'] is int ? json['parent_id'] : int.tryParse(json['parent_id']?.toString() ?? ''),
+      level: json['level'] is int ? json['level'] : int.tryParse(json['level']?.toString() ?? '1') ?? 1,
       title: json['title']?.toString() ?? json['name']?.toString() ?? 'অধ্যায়',
-      chapterNumber: json['chapter_number'] ?? json['order'] ?? 1,
-      pageStart: json['page_start'] ?? json['start_page'] ?? 1,
-      pageEnd: json['page_end'] ?? json['end_page'] ?? 1,
-      price: (json['price'] != null)
-          ? double.tryParse(json['price'].toString()) ?? 0.0
-          : 0.0,
-      isFree: json['is_free'] == true || json['is_free'] == 1,
-      isPurchased: json['is_purchased'] == true || json['purchased'] == true,
+      chapterNumber: int.tryParse((json['chapter_number'] ?? json['order'] ?? 1).toString()) ?? 1,
+      pageStart: int.tryParse((json['page_start'] ?? json['start_page'] ?? 1).toString()) ?? 1,
+      pageEnd: int.tryParse((json['page_end'] ?? json['end_page'] ?? 1).toString()) ?? 1,
+      price: parsedPrice,
+      isFree: free,
+      isPurchased: owned,
+      purchasable: json['purchasable'] == true,
       readerUrl: json['reader_url']?.toString(),
     );
   }
@@ -58,6 +75,9 @@ class BookModel {
   final int totalPages;
   final bool isFree;
   final bool isPurchased;
+  final bool hasAccess;
+  final String? accessType;
+  final bool chapterPurchaseEnabled;
   final bool inBookshelf;
   final double progress;
   final int? lastReadPage;
@@ -78,14 +98,48 @@ class BookModel {
     this.totalPages = 0,
     this.isFree = false,
     this.isPurchased = false,
+    this.hasAccess = false,
+    this.accessType,
+    this.chapterPurchaseEnabled = false,
     this.inBookshelf = false,
     this.progress = 0.0,
     this.lastReadPage,
     this.chapters = const [],
   });
 
+  BookModel copyWith({
+    List<ChapterModel>? chapters,
+    bool? hasAccess,
+    String? accessType,
+    bool? chapterPurchaseEnabled,
+    bool? inBookshelf,
+  }) {
+    return BookModel(
+      id: id,
+      title: title,
+      slug: slug,
+      description: description,
+      author: author,
+      publisher: publisher,
+      subject: subject,
+      gradeLevel: gradeLevel,
+      price: price,
+      discountPrice: discountPrice,
+      coverImage: coverImage,
+      totalPages: totalPages,
+      isFree: isFree,
+      isPurchased: isPurchased,
+      hasAccess: hasAccess ?? this.hasAccess,
+      accessType: accessType ?? this.accessType,
+      chapterPurchaseEnabled: chapterPurchaseEnabled ?? this.chapterPurchaseEnabled,
+      inBookshelf: inBookshelf ?? this.inBookshelf,
+      progress: progress,
+      lastReadPage: lastReadPage,
+      chapters: chapters ?? this.chapters,
+    );
+  }
+
   factory BookModel.fromJson(Map<String, dynamic> json) {
-    // 1. Author Resolution (handle String, Map {id, name}, or null)
     String parsedAuthor = 'শিখুন';
     if (json['author'] is Map) {
       parsedAuthor = json['author']['name']?.toString() ?? 'শিখুন';
@@ -93,7 +147,6 @@ class BookModel {
       parsedAuthor = json['author'].toString();
     }
 
-    // 2. Publisher Resolution
     String parsedPublisher = 'শিখুন প্রকাশনী';
     if (json['publication'] is Map) {
       parsedPublisher = json['publication']['name']?.toString() ?? 'শিখুন প্রকাশনী';
@@ -103,7 +156,6 @@ class BookModel {
       parsedPublisher = json['publisher'].toString();
     }
 
-    // 3. Cover Image Resolution (ensure full URL with https://sikhun.com/storage/)
     String? rawCover = json['cover_image_url']?.toString() ??
         json['cover_url']?.toString() ??
         json['cover_image']?.toString();
@@ -113,18 +165,25 @@ class BookModel {
         resolvedCover = rawCover;
       } else {
         final cleanPath = rawCover.startsWith('/') ? rawCover.substring(1) : rawCover;
-        if (cleanPath.startsWith('storage/')) {
-          resolvedCover = 'https://sikhun.com/$cleanPath';
-        } else {
-          resolvedCover = 'https://sikhun.com/storage/$cleanPath';
-        }
+        resolvedCover = cleanPath.startsWith('storage/')
+            ? 'https://sikhun.com/$cleanPath'
+            : 'https://sikhun.com/storage/$cleanPath';
       }
     }
 
-    var rawChapters = json['chapters'] as List?;
-    List<ChapterModel> chapterList = rawChapters != null
+    final rawChapters = json['chapters'] as List?;
+    final chapterList = rawChapters != null
         ? rawChapters.map((c) => ChapterModel.fromJson(c as Map<String, dynamic>)).toList()
-        : [];
+        : <ChapterModel>[];
+
+    final parsedPrice = json['price'] != null
+        ? double.tryParse(json['price'].toString()) ?? 0.0
+        : 0.0;
+    final free = json['is_free'] == true || json['is_free'] == 1 || parsedPrice == 0.0;
+    final hasAcc = json['has_access'] == true ||
+        json['is_purchased'] == true ||
+        json['purchased'] == true ||
+        free;
 
     return BookModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
@@ -135,20 +194,19 @@ class BookModel {
       publisher: parsedPublisher,
       subject: json['subject']?.toString(),
       gradeLevel: json['grade_level']?.toString() ?? json['class']?.toString() ?? json['level']?.toString(),
-      price: (json['price'] != null)
-          ? double.tryParse(json['price'].toString()) ?? 0.0
-          : 0.0,
-      discountPrice: (json['discount_price'] != null)
+      price: parsedPrice,
+      discountPrice: json['discount_price'] != null
           ? double.tryParse(json['discount_price'].toString())
           : null,
       coverImage: resolvedCover,
       totalPages: json['total_pages'] ?? json['pages_count'] ?? 0,
-      isFree: json['is_free'] == true || json['is_free'] == 1 || (json['price'] != null && (double.tryParse(json['price'].toString()) ?? 0.0) == 0.0),
-      isPurchased: json['is_purchased'] == true || json['purchased'] == true,
+      isFree: free,
+      isPurchased: json['is_purchased'] == true || json['purchased'] == true || json['access_type'] == 'purchased',
+      hasAccess: hasAcc,
+      accessType: json['access_type']?.toString(),
+      chapterPurchaseEnabled: json['chapter_purchase_enabled'] == true || json['chapter_purchase_enabled'] == 1,
       inBookshelf: json['in_bookshelf'] == true || json['in_shelf'] == true,
-      progress: (json['progress'] != null)
-          ? double.tryParse(json['progress'].toString()) ?? 0.0
-          : 0.0,
+      progress: json['progress'] != null ? double.tryParse(json['progress'].toString()) ?? 0.0 : 0.0,
       lastReadPage: json['last_read_page'],
       chapters: chapterList,
     );

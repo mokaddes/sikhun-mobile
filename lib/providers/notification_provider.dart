@@ -48,9 +48,11 @@ class NotificationProvider extends ChangeNotifier {
       final data = response.data;
       final rawItems = (data['items'] is Map && data['items']['data'] is List)
           ? data['items']['data'] as List
-          : (data['items'] is List ? data['items'] as List : (data['data'] is List ? data['data'] as List : []));
+          : (data['items'] is List
+              ? data['items'] as List
+              : (data['data'] is List ? data['data'] as List : []));
 
-      _notifications = rawItems.map((n) => NotificationModel.fromJson(n)).toList();
+      _notifications = rawItems.whereType<Map<String, dynamic>>().map(NotificationModel.fromJson).toList();
       _unreadCount = data['unread_count'] is int
           ? data['unread_count']
           : int.tryParse(data['unread_count']?.toString() ?? '0') ?? 0;
@@ -60,7 +62,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<bool> markAsRead(int notificationId) async {
-    final response = await ApiService.post(
+    final response = await ApiService.put(
       ApiEndpoints.notificationMarkRead(notificationId),
     );
     if (response.success) {
@@ -85,7 +87,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<bool> markAllAsRead() async {
-    final response = await ApiService.post(ApiEndpoints.notificationsMarkAllRead);
+    final response = await ApiService.put(ApiEndpoints.notificationsMarkAllRead);
     if (response.success) {
       _notifications = _notifications.map((n) {
         return NotificationModel(
@@ -99,6 +101,16 @@ class NotificationProvider extends ChangeNotifier {
         );
       }).toList();
       _unreadCount = 0;
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> deleteNotification(int id) async {
+    final response = await ApiService.delete(ApiEndpoints.notificationDelete(id));
+    if (response.success) {
+      _notifications.removeWhere((n) => n.id == id);
       notifyListeners();
       return true;
     }
