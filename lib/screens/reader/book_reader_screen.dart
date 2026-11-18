@@ -405,10 +405,10 @@ class _BookReaderScreenState extends State<BookReaderScreen> {
                                   ),
                                   if (_totalPages > 1)
                                     Slider(
-                                      value: _currentPage.toDouble().clamp(1, _totalPages.toDouble()),
+                                      value: _currentPage.toDouble().clamp(1.0, _totalPages.toDouble()).toDouble(),
                                       min: 1,
                                       max: _totalPages.toDouble(),
-                                      divisions: (_totalPages - 1).clamp(1, 1000),
+                                      divisions: (_totalPages - 1).clamp(1, 1000).toInt(),
                                       activeColor: SikhunTheme.primary,
                                       onChanged: (v) => setState(() => _currentPage = v.round()),
                                       onChangeEnd: (v) => _loadPage(v.round()),

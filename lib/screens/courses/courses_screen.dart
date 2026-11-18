@@ -458,7 +458,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                               ),
                               const SizedBox(height: 6),
                               LinearProgressIndicator(
-                                value: (progress / 100).clamp(0.0, 1.0),
+                                value: (progress / 100).clamp(0.0, 1.0).toDouble(),
                                 color: SikhunTheme.success,
                                 minHeight: 7,
                                 borderRadius: BorderRadius.circular(6),

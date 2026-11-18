@@ -88,7 +88,7 @@ class ContinueReadingModel {
     final int curr = json['current_page'] ?? json['last_page'] ?? 1;
     final int pct = json['progress'] != null
         ? (int.tryParse(json['progress'].toString()) ?? 0)
-        : (total > 0 ? ((curr / total) * 100).round().clamp(0, 100) : 0);
+        : (total > 0 ? ((curr / total) * 100).round().clamp(0, 100).toInt() : 0);
 
     return ContinueReadingModel(
       bookId: json['book_id'] ?? json['id'] ?? 0,

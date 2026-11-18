@@ -440,7 +440,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                         const SizedBox(height: 10),
                         LinearProgressIndicator(
-                          value: (data.continueReading!.progressPercent / 100).clamp(0.0, 1.0),
+                          value: (data.continueReading!.progressPercent / 100).clamp(0.0, 1.0).toDouble(),
                           backgroundColor: surface2,
                           valueColor: AlwaysStoppedAnimation<Color>(primary),
                           minHeight: 7,

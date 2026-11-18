@@ -38,7 +38,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const ProfileScreen(),
     ];
 
-    final safeIndex = _currentIndex.clamp(0, screens.length - 1);
+    final int safeIndex = _currentIndex.clamp(0, screens.length - 1).toInt();
 
     return Scaffold(
       body: IndexedStack(

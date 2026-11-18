@@ -53,8 +53,15 @@ jobs:
         run: flutter pub get
 
       - name: Build Release APK
+        shell: bash
         run: |
-          flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
+          set -o pipefail
+          if ! flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation 2>&1 | tee build.log; then
+            grep -E "Error:|lib/.*\.dart:|FAILURE:|Exception:" build.log | head -n 25 | while IFS= read -r line; do
+              echo "::error title=FlutterBuild::$line"
+            done
+            exit 1
+          fi
 
       - name: Prepare APK for Release
         run: |
