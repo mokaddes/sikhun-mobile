@@ -275,8 +275,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 16),
 
               // 2. Real Pending Order Payment Alert Banner (No Hardcoded Order IDs!)
-              if (data?.pendingOrder != null) ...[
-                _buildPendingPaymentAlert(data!.pendingOrder!, primary, surface, textColor, muted, locale),
+              if (data != null && data.pendingOrder != null) ...[
+                _buildPendingPaymentAlert(data.pendingOrder!, primary, surface, textColor, muted, locale),
                 const SizedBox(height: 16),
               ],
 
@@ -362,10 +362,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             data?.activeSubscriptionPlan ?? (isEn ? 'Free Trial' : 'ফ্রি ট্রায়াল'),
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
                           ),
-                          if (data?.activeSubscriptionExpiresAt != null) ...[
+                          if (data != null && data.activeSubscriptionExpiresAt != null) ...[
                             const SizedBox(height: 2),
                             Text(
-                              '${locale.t('dashboard.active_until')} ${data!.activeSubscriptionExpiresAt}',
+                              '${locale.t('dashboard.active_until')} ${data.activeSubscriptionExpiresAt}',
                               style: TextStyle(fontSize: 12, color: muted),
                             ),
                           ],
@@ -392,7 +392,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 20),
 
               // 5. Continue Reading Card
-              if (data?.continueReading != null) ...[
+              if (data != null && data.continueReading != null) ...[
                 Text(
                   locale.t('dashboard.continue_reading'),
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
@@ -423,7 +423,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                data!.continueReading!.bookTitle,
+                                data.continueReading!.bookTitle,
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
                               ),
                             ),

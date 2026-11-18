@@ -213,7 +213,7 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (dash?.activeSubscription != null)
+                if (dash != null && dash.activeSubscription != null)
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -229,7 +229,7 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '${en ? 'Active Plan' : 'বর্তমান প্ল্যান'}: ${dash!.activeSubscriptionPlan}${dash.activeSubscriptionExpiresAt != null ? ' • ${dash.activeSubscriptionExpiresAt}' : ''}',
+                            '${en ? 'Active Plan' : 'বর্তমান প্ল্যান'}: ${dash.activeSubscriptionPlan}${dash.activeSubscriptionExpiresAt != null ? ' • ${dash.activeSubscriptionExpiresAt}' : ''}',
                             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
