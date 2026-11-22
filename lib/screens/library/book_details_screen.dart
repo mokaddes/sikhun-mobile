@@ -309,7 +309,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     }
 
     final hasLockedChapters = book.chapters.any((c) => !c.canRead);
-    final hasAnyReadAccess = book.hasAccess || book.isFree || book.isPurchased || book.chapters.any((c) => c.canRead);
+    final hasPurchasableChapters = book.chapters.any((c) => !c.canRead && c.price > 0);
+    final hasFullReadAccess = book.hasAccess || !book.isPaidBook || book.isPurchased;
+    final hasAnyReadAccess = hasFullReadAccess || book.chapters.any((c) => c.canRead);
 
     return Scaffold(
       appBar: AppBar(
@@ -346,7 +348,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         child: SafeArea(
           child: Row(
             children: [
-              if (hasAnyReadAccess)
+              if (!book.isPaidBook || hasFullReadAccess)
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () => _openReader(book),
@@ -354,7 +356,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     label: Text(
                       book.lastReadPage != null && book.lastReadPage! > 1
                           ? 'পড়া চালিয়ে যান (${book.lastReadPage})'
-                          : 'বইটি পড়ুন',
+                          : (!book.isPaidBook ? 'বইটি পড়ুন (বিনামূল্যে)' : 'বইটি পড়ুন'),
                     ),
                   ),
                 )
@@ -366,7 +368,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     label: Text('সম্পূর্ণ বই কিনুন (${book.effectivePriceDisplay})'),
                   ),
                 ),
-              if (hasLockedChapters && book.chapterPurchaseEnabled) ...[
+              if (hasLockedChapters && (hasPurchasableChapters || book.chapterPurchaseEnabled)) ...[
                 const SizedBox(width: 10),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: SikhunTheme.accent),

@@ -10,6 +10,7 @@ class ApiEndpoints {
   static const String forgotPassword = '$baseUrl/auth/forgot-password';
   static const String resetPassword = '$baseUrl/auth/reset-password';
   static const String sendVerification = '$baseUrl/auth/email/verification-notification';
+  static const String googleOAuthExchange = '$baseUrl/auth/oauth/google/exchange';
 
   // Public Content & Portals
   static const String home = '$baseUrl/home';
@@ -159,6 +160,9 @@ class ApiEndpoints {
   static const String updateLeaderboardOptOut = '$baseUrl/profile/leaderboard-opt-out';
   static const String updateNotifications = '$baseUrl/profile/notifications';
   static const String registerFcmToken = '$baseUrl/profile/fcm-token';
+  static const String unregisterFcmToken = '$baseUrl/profile/fcm-token';
+  static const String deleteAccount = '$baseUrl/profile/account';
+  static const String exportData = '$baseUrl/profile/export';
 
   // Notifications
   static const String notifications = '$baseUrl/notifications';

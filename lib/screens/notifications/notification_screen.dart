@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/notification_model.dart';
 import '../../providers/notification_provider.dart';
+import '../../services/firebase_push_service.dart';
 
 class NotificationScreen extends StatelessWidget {
   const NotificationScreen({super.key});
@@ -87,9 +88,20 @@ class NotificationScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 12.5, color: SikhunTheme.textDark),
             ),
             const SizedBox(height: 6),
-            Text(
-              _formatDate(item.createdAt),
-              style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark),
+            Row(
+              children: [
+                Text(
+                  _formatDate(item.createdAt),
+                  style: const TextStyle(fontSize: 11, color: SikhunTheme.mutedDark),
+                ),
+                if (item.actionUrl != null) ...[
+                  const SizedBox(width: 10),
+                  const Text(
+                    'বিস্তারিত দেখুন →',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: SikhunTheme.primary),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -107,6 +119,9 @@ class NotificationScreen extends StatelessWidget {
           if (!item.isRead) {
             notifProv.markAsRead(item.id);
           }
+          if (item.actionUrl != null) {
+            FirebasePushService.openNotificationLink(item.actionUrl!);
+          }
         },
       ),
     );
@@ -115,12 +130,28 @@ class NotificationScreen extends StatelessWidget {
   IconData _getNotificationIcon(String? type) {
     switch (type) {
       case 'exam':
+      case 'exam_reminder':
         return Icons.quiz_outlined;
       case 'book':
+      case 'book_recommendation':
         return Icons.menu_book_outlined;
       case 'wallet':
+      case 'wallet_transaction':
+      case 'wallet_low_balance':
         return Icons.account_balance_wallet_outlined;
+      case 'admission_notice':
+        return Icons.school_outlined;
+      case 'job_news':
+        return Icons.work_outline;
+      case 'blog_post':
+        return Icons.article_outlined;
+      case 'plan_update':
+      case 'subscription_expiry':
+        return Icons.workspace_premium_outlined;
+      case 'special_offer':
+        return Icons.local_offer_outlined;
       case 'announcement':
+      case 'admin_broadcast':
         return Icons.campaign_outlined;
       default:
         return Icons.notifications_outlined;

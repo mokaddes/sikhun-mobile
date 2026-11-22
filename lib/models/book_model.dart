@@ -57,7 +57,7 @@ class ChapterModel {
     );
   }
 
-  bool get canRead => isFree || isPurchased || price <= 0;
+  bool get canRead => isFree || isPurchased;
 }
 
 class BookModel {
@@ -212,9 +212,11 @@ class BookModel {
     );
   }
 
+  bool get isPaidBook => !isFree && price > 0;
+
   String get effectivePriceDisplay {
     if (price <= 0 || isFree) {
-      return 'ফ্রি';
+      return 'বিনামূল্যে';
     }
     final effective = discountPrice ?? price;
     return '৳${effective.toStringAsFixed(effective.truncateToDouble() == effective ? 0 : 2)}';

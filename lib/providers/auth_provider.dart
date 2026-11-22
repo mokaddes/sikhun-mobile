@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api_endpoints.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/firebase_push_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _user;
@@ -19,6 +21,9 @@ class AuthProvider extends ChangeNotifier {
     final token = await ApiService.getToken();
     if (token != null && token.isNotEmpty) {
       await fetchProfile();
+      if (_user != null) {
+        FirebasePushService.instance.syncIfAuthenticated();
+      }
     }
     _isInitialized = true;
     notifyListeners();
@@ -46,6 +51,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         await fetchProfile();
       }
+      FirebasePushService.instance.syncIfAuthenticated();
       notifyListeners();
       return true;
     } else {
@@ -92,6 +98,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         await fetchProfile();
       }
+      FirebasePushService.instance.syncIfAuthenticated();
       notifyListeners();
       return true;
     } else {
@@ -172,6 +179,77 @@ class AuthProvider extends ChangeNotifier {
 
   Future<ApiResponse> sendVerificationEmail() async {
     return ApiService.post(ApiEndpoints.sendVerification);
+  }
+
+  /// Production Google OAuth sign-in -> exchanges Google access token for Sanctum token.
+  Future<bool> loginWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final auth = await account.authentication;
+      final accessToken = auth.accessToken;
+      if (accessToken == null || accessToken.isEmpty) {
+        _isLoading = false;
+        _errorMessage = 'Google অ্যাক্সেস টোকেন পাওয়া যায়নি। আবার চেষ্টা করুন।';
+        notifyListeners();
+        return false;
+      }
+
+      final response = await ApiService.post(
+        ApiEndpoints.googleOAuthExchange,
+        body: {'access_token': accessToken},
+      );
+
+      _isLoading = false;
+      if (response.success && response.data != null) {
+        final token = response.data['token'] ?? response.data['access_token'];
+        if (token != null) {
+          await ApiService.setToken(token.toString());
+        }
+        final rawStudent = response.data['student'] ?? response.data['user'];
+        if (rawStudent is Map<String, dynamic>) {
+          _user = UserModel.fromJson(rawStudent);
+        } else {
+          await fetchProfile();
+        }
+        FirebasePushService.instance.syncIfAuthenticated();
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = response.message ?? 'Google লগইন ব্যর্থ হয়েছে।';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Google লগইন সম্পন্ন করা যায়নি: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Schedules 30-day soft account deletion (Facebook-style recovery window).
+  Future<ApiResponse> deleteAccount() async {
+    final res = await ApiService.delete(
+      ApiEndpoints.deleteAccount,
+      body: {'confirmation': 'DELETE'},
+    );
+    if (res.success) {
+      await ApiService.clearToken();
+      _user = null;
+      notifyListeners();
+    }
+    return res;
   }
 
   Future<void> logout() async {

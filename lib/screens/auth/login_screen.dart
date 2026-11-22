@@ -218,6 +218,40 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                 ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        localeProv.isBengali ? 'অথবা' : 'OR',
+                        style: const TextStyle(fontSize: 12, color: SikhunTheme.mutedDark),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: auth.isLoading
+                      ? null
+                      : () async {
+                          final ok = await auth.loginWithGoogle();
+                          if (ok && mounted) {
+                            Navigator.of(context).pop(true);
+                          }
+                        },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.g_mobiledata, size: 26),
+                  label: Text(
+                    localeProv.isBengali ? 'Google দিয়ে লগইন করুন' : 'Continue with Google',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
                 const SizedBox(height: 20),
 
                 Row(

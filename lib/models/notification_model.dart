@@ -19,6 +19,13 @@ class NotificationModel {
 
   bool get isRead => readAt != null;
 
+  String? get actionUrl {
+    final raw = data?['url'] ?? data?['action_url'];
+    if (raw == null) return null;
+    final trimmed = raw.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,

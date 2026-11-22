@@ -9,6 +9,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/question_bank_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/firebase_push_service.dart';
 import '../../widgets/sikhun_brand_logo.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
@@ -523,6 +524,8 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 if (auth.isAuthenticated && user != null) ...[
                   const Divider(height: 1),
+                  const _PushNotificationToggleTile(),
+                  const Divider(height: 1),
                   SwitchListTile(
                     title: const Text('লিডারবোর্ডে আমার নাম লুকিয়ে রাখুন'),
                     secondary: const Icon(Icons.visibility_off_outlined),
@@ -577,8 +580,53 @@ class ProfileScreen extends StatelessWidget {
                 const ListTile(
                   leading: Icon(Icons.info_outline, color: SikhunTheme.primary),
                   title: Text('ভার্সন'),
-                  subtitle: Text('SIKHUN Mobile v2.0.0 (Production)'),
+                  subtitle: Text('SIKHUN Mobile v2.1.0 (Production)'),
                 ),
+                if (auth.isAuthenticated) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline, color: SikhunTheme.danger),
+                    title: const Text('অ্যাকাউন্ট ডিলিট করুন', style: TextStyle(color: SikhunTheme.danger)),
+                    subtitle: const Text(
+                      '৩০ দিনের মধ্যে পুনরায় লগইন করে অ্যাকাউন্ট ফিরিয়ে আনতে পারবেন',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                    onTap: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('অ্যাকাউন্ট ডিলিট (৩০ দিন রিকভারি)'),
+                          content: const Text(
+                            'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় হয়ে ৩০ দিন পর স্থায়ীভাবে মুছে যাবে। এই ৩০ দিনের মধ্যে পুনরায় লগইন করলে আপনার অ্যাকাউন্ট অটোমেটিক ফিরে পাবেন। আপনি কি নিশ্চিত?',
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('বাতিল')),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: SikhunTheme.danger),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('হ্যাঁ, ডিলিট করুন'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && context.mounted) {
+                        final res = await auth.deleteAccount();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                res.success
+                                    ? 'অ্যাকাউন্ট ডিলিট শিডিউল হয়েছে (৩০ দিনের মধ্যে লগইন করে ফিরিয়ে আনা যাবে)।'
+                                    : (res.message ?? 'ব্যর্থ হয়েছে'),
+                              ),
+                              backgroundColor: res.success ? SikhunTheme.success : SikhunTheme.danger,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -618,6 +666,58 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+}
+
+class _PushNotificationToggleTile extends StatefulWidget {
+  const _PushNotificationToggleTile();
+
+  @override
+  State<_PushNotificationToggleTile> createState() => _PushNotificationToggleTileState();
+}
+
+class _PushNotificationToggleTileState extends State<_PushNotificationToggleTile> {
+  bool _enabled = true;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FirebasePushService.instance.isPushEnabled().then((val) {
+      if (mounted) setState(() => _enabled = val);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      title: const Text('পুশ নোটিফিকেশন (Firebase)'),
+      subtitle: const Text(
+        'নতুন ভর্তি/চাকরির বিজ্ঞপ্তি, ইনভয়েস ও অফার অ্যালার্ট',
+        style: TextStyle(fontSize: 11.5),
+      ),
+      secondary: const Icon(Icons.notifications_active_outlined),
+      value: _enabled,
+      onChanged: _busy
+          ? null
+          : (val) async {
+              setState(() => _busy = true);
+              final updated = await FirebasePushService.instance.setPushEnabled(val);
+              if (mounted) {
+                setState(() {
+                  _enabled = updated;
+                  _busy = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      updated ? 'পুশ নোটিফিকেশন চালু করা হয়েছে!' : 'পুশ নোটিফিকেশন বন্ধ করা হয়েছে।',
+                    ),
+                  ),
+                );
+              }
+            },
     );
   }
 }

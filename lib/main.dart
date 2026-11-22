@@ -12,10 +12,12 @@ import 'providers/dashboard_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'services/offline_service.dart';
+import 'services/firebase_push_service.dart';
 import 'screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FirebasePushService.instance.init();
   runApp(const SikhunApp());
 }
 

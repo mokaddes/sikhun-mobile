@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config/api_endpoints.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
+import '../services/firebase_push_service.dart';
 
 class NotificationProvider extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
@@ -15,6 +16,9 @@ class NotificationProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   void startSync() {
+    FirebasePushService.instance.onForegroundMessageReceived = () {
+      fetchNotifications(silent: true);
+    };
     fetchNotifications();
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 45), (_) {
